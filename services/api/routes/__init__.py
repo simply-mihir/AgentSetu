@@ -1,7 +1,8 @@
 from fastapi import APIRouter
-from routes import merchants, discovery, transactions, payments, audit, webhooks
+from routes import auth, merchants, discovery, transactions, payments, audit, webhooks
 
 api_router = APIRouter()
+api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
 api_router.include_router(merchants.router, prefix="/merchants", tags=["Merchants"])
 api_router.include_router(discovery.router, prefix="/discover", tags=["Discovery"])
 api_router.include_router(transactions.router, prefix="/transactions", tags=["Transactions"])
