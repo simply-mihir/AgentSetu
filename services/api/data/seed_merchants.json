@@ -1,0 +1,218 @@
+[
+  {
+    "merchant_id": "organickart-01",
+    "merchant_name": "OrganicKart",
+    "currency": "INR",
+    "description": "Premium organic grocery store with certified natural products. Farm-to-doorstep delivery.",
+    "category": "grocery",
+    "max_autonomous_spend_inr": 500,
+    "approval_threshold_inr": 1500,
+    "restricted_categories": [],
+    "products": [
+      {
+        "product_id": "ok-honey-500",
+        "name": "Organic Raw Honey 500g",
+        "category": "grocery",
+        "price_inr": 449,
+        "inventory_count": 18,
+        "availability": true,
+        "delivery_sla_days": [1, 2],
+        "return_policy": "7_days",
+        "merchant_rating": 4.6,
+        "description": "Cold-pressed organic raw honey from Himalayan bee farms. Rich in antioxidants, unprocessed and pure."
+      },
+      {
+        "product_id": "ok-turmeric-250",
+        "name": "Organic Turmeric Powder 250g",
+        "category": "spices",
+        "price_inr": 189,
+        "inventory_count": 35,
+        "availability": true,
+        "delivery_sla_days": [1, 2],
+        "return_policy": "7_days",
+        "merchant_rating": 4.6,
+        "description": "Pure organic turmeric powder with high curcumin content. Lab-tested, no additives."
+      },
+      {
+        "product_id": "ok-ghee-500",
+        "name": "Pure Desi Cow Ghee 500ml",
+        "category": "grocery",
+        "price_inr": 699,
+        "inventory_count": 12,
+        "availability": true,
+        "delivery_sla_days": [1, 2],
+        "return_policy": "7_days",
+        "merchant_rating": 4.7,
+        "description": "Traditional Bilona method desi cow ghee. A2 milk sourced from Gir cows. Zero additives."
+      },
+      {
+        "product_id": "ok-almonds-250",
+        "name": "California Almonds 250g",
+        "category": "nuts",
+        "price_inr": 329,
+        "inventory_count": 24,
+        "availability": true,
+        "delivery_sla_days": [1, 2],
+        "return_policy": "7_days",
+        "merchant_rating": 4.5,
+        "description": "Premium California almonds, roasted and unsalted. Rich in Vitamin E and healthy fats."
+      },
+      {
+        "product_id": "ok-quinoa-500",
+        "name": "Organic Quinoa 500g",
+        "category": "staples",
+        "price_inr": 399,
+        "inventory_count": 15,
+        "availability": true,
+        "delivery_sla_days": [1, 3],
+        "return_policy": "7_days",
+        "merchant_rating": 4.4,
+        "description": "White organic quinoa, protein-rich and gluten-free. Sourced from sustainable farms."
+      }
+    ]
+  },
+  {
+    "merchant_id": "techmart-01",
+    "merchant_name": "TechMart",
+    "currency": "INR",
+    "description": "Your trusted electronics and gadgets store. Premium products with warranty.",
+    "category": "electronics",
+    "max_autonomous_spend_inr": 999,
+    "approval_threshold_inr": 5000,
+    "restricted_categories": [],
+    "products": [
+      {
+        "product_id": "tm-cable-usbc",
+        "name": "USB-C Fast Charging Cable 2m",
+        "category": "electronics",
+        "price_inr": 349,
+        "inventory_count": 50,
+        "availability": true,
+        "delivery_sla_days": [1, 2],
+        "return_policy": "30_days",
+        "merchant_rating": 4.3,
+        "description": "Braided nylon 100W USB-C to USB-C cable. Supports PD 3.0 fast charging. 2-meter length."
+      },
+      {
+        "product_id": "tm-earbuds-basic",
+        "name": "Wireless Earbuds Pro",
+        "category": "electronics",
+        "price_inr": 799,
+        "inventory_count": 20,
+        "availability": true,
+        "delivery_sla_days": [1, 3],
+        "return_policy": "30_days",
+        "merchant_rating": 4.2,
+        "description": "True wireless earbuds with ANC, 24-hour battery life and IPX4 water resistance."
+      },
+      {
+        "product_id": "tm-powerbank-10k",
+        "name": "10000mAh Power Bank",
+        "category": "electronics",
+        "price_inr": 999,
+        "inventory_count": 30,
+        "availability": true,
+        "delivery_sla_days": [1, 2],
+        "return_policy": "30_days",
+        "merchant_rating": 4.4,
+        "description": "Slim 10000mAh power bank with dual USB-A + USB-C output. 18W fast charging."
+      },
+      {
+        "product_id": "tm-hub-usb",
+        "name": "7-in-1 USB Hub",
+        "category": "electronics",
+        "price_inr": 1499,
+        "inventory_count": 15,
+        "availability": true,
+        "delivery_sla_days": [2, 4],
+        "return_policy": "30_days",
+        "merchant_rating": 4.1,
+        "description": "USB-C hub with HDMI 4K, 3x USB 3.0, SD card reader, PD charging. Compatible with laptops."
+      },
+      {
+        "product_id": "tm-phone-stand",
+        "name": "Adjustable Phone Stand",
+        "category": "electronics",
+        "price_inr": 299,
+        "inventory_count": 45,
+        "availability": true,
+        "delivery_sla_days": [1, 2],
+        "return_policy": "30_days",
+        "merchant_rating": 4.0,
+        "description": "360° rotating aluminum desk phone stand. Compatible with all smartphones. Foldable design."
+      }
+    ]
+  },
+  {
+    "merchant_id": "spiceworld-01",
+    "merchant_name": "SpiceWorld",
+    "currency": "INR",
+    "description": "Finest Indian spices and masalas direct from source regions. Authentic and fresh.",
+    "category": "spices",
+    "max_autonomous_spend_inr": 300,
+    "approval_threshold_inr": 800,
+    "restricted_categories": [],
+    "products": [
+      {
+        "product_id": "sw-garam-masala",
+        "name": "Premium Garam Masala 100g",
+        "category": "spices",
+        "price_inr": 149,
+        "inventory_count": 40,
+        "availability": true,
+        "delivery_sla_days": [2, 3],
+        "return_policy": "15_days",
+        "merchant_rating": 4.8,
+        "description": "Freshly ground garam masala from whole spices. 17 spice blend with no artificial color."
+      },
+      {
+        "product_id": "sw-black-pepper",
+        "name": "Black Pepper Powder 100g",
+        "category": "spices",
+        "price_inr": 119,
+        "inventory_count": 55,
+        "availability": true,
+        "delivery_sla_days": [2, 3],
+        "return_policy": "15_days",
+        "merchant_rating": 4.7,
+        "description": "Kerala Malabar black pepper, freshly ground. High piperine content for potency."
+      },
+      {
+        "product_id": "sw-kashmiri-chilli",
+        "name": "Kashmiri Red Chilli 200g",
+        "category": "spices",
+        "price_inr": 179,
+        "inventory_count": 30,
+        "availability": true,
+        "delivery_sla_days": [2, 3],
+        "return_policy": "15_days",
+        "merchant_rating": 4.6,
+        "description": "Authentic Kashmiri chilli powder with vivid red color and mild heat. Perfect for gravies."
+      },
+      {
+        "product_id": "sw-cumin-powder",
+        "name": "Roasted Cumin Powder 100g",
+        "category": "spices",
+        "price_inr": 99,
+        "inventory_count": 60,
+        "availability": true,
+        "delivery_sla_days": [2, 3],
+        "return_policy": "15_days",
+        "merchant_rating": 4.5,
+        "description": "Rajasthani cumin seeds dry-roasted and ground fresh. Aromatic and digestive."
+      },
+      {
+        "product_id": "sw-spice-combo",
+        "name": "Essential Spice Combo Box (5 spices)",
+        "category": "spices",
+        "price_inr": 499,
+        "inventory_count": 20,
+        "availability": true,
+        "delivery_sla_days": [2, 4],
+        "return_policy": "15_days",
+        "merchant_rating": 4.9,
+        "description": "Curated set of 5 essential Indian spices: Turmeric, Cumin, Coriander, Garam Masala, Chilli."
+      }
+    ]
+  }
+]
