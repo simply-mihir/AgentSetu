@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# Test/dev
+tests/
+.pytest_cache/
+htmlcov/
+.coverage
+*.db
+
+# Git
+.git/
+.gitignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker (avoid recursive copy)
+Dockerfile
+docker-compose*.yml

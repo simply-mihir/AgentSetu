@@ -1,0 +1,73 @@
+# AgentSetu — Local Development Stack
+# Usage: docker compose up -d
+# API:     http://localhost:8000
+# Docs:    http://localhost:8000/docs
+# Web:     http://localhost:3000
+# PGAdmin: http://localhost:5050 (optional)
+
+version: "3.9"
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agentsetu
+      POSTGRES_PASSWORD: agentsetu_dev
+      POSTGRES_DB: agentsetu
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentsetu"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── AgentSetu API ────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      APP_MODE: demo
+      ENVIRONMENT: development
+      BASE_URL: http://localhost:8000
+      DATABASE_URL: postgresql://agentsetu:agentsetu_dev@postgres:5432/agentsetu
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: dev-only-docker-secret-key-change-in-prod
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+      LOG_FORMAT: text
+      # Set real keys via .env or docker-compose.override.yml
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-rzp_test_demo}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-demo_secret}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-demo_webhook}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-demo}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  pg_data:
