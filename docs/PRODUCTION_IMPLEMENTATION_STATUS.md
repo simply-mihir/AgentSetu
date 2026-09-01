@@ -262,12 +262,12 @@
 ## Phase 30 — Manual Task Checklist ✅
 - [x] docs/MANUAL_SETUP_CHECKLIST.md — 12 sections covering all external dependencies
 
-## Phase 31 — Documentation
-- [ ] README.md update
-- [ ] docs/ARCHITECTURE.md
-- [ ] docs/API.md
-- [ ] docs/SECURITY.md
-- [ ] docs/DEVELOPMENT.md
+## Phase 31 — Documentation ✅
+- [x] README.md updated (ARM v0.2, auth endpoints, tech stack, docs table)
+- [x] docs/ARCHITECTURE.md (system layers, transaction flow, state machine, data models, observability)
+- [x] docs/SECURITY.md (threat model, 7 mitigation categories, deployment checklist)
+- [x] docs/DEVELOPMENT.md (setup, testing, conventions, env vars)
+- [x] API reference in README expanded (22 endpoints with auth requirements)
 
 ## Phase 32 — Final Validation
 - [ ] All backend tests pass
