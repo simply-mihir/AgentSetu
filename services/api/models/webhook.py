@@ -1,11 +1,14 @@
 """WebhookEvent model — idempotent event store for all incoming provider webhooks."""
 from sqlmodel import SQLModel, Field
+from sqlalchemy import UniqueConstraint
 from typing import Optional
 from datetime import datetime
+from enum import Enum
 import uuid
 
 
-class WebhookProcessingStatus(str):
+class WebhookProcessingStatus(str, Enum):
+    """Phase 7 fix: proper Enum instead of bare str constants."""
     RECEIVED = "RECEIVED"
     PROCESSED = "PROCESSED"
     FAILED = "FAILED"
@@ -15,6 +18,9 @@ class WebhookProcessingStatus(str):
 
 class WebhookEvent(SQLModel, table=True):
     __tablename__ = "webhook_events"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_event_id", name="uq_webhook_provider_event"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     webhook_id: str = Field(

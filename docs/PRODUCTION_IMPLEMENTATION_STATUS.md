@@ -2,7 +2,7 @@
 
 **Baseline checkpoint:** `c87dba4` on `main` (2026-09-01)  
 **Baseline tests:** 41/41 passing  
-**Current tests:** 53/53 passing  
+**Current tests:** 59/59 passing  
 **Frontend build:** clean  
 
 ---
@@ -27,11 +27,16 @@
 - [x] Tests: 53/53 passing (41 original + 12 new security tests)
 - [x] Frontend build clean with auth pages
 
-## Phase 2 — Identity / Multi-Tenancy
-- [ ] Unique constraint: merchant_id + user_id on MerchantUser
-- [ ] Unique constraint: product_id + merchant_id on Product
-- [ ] Transaction.buyer_id FK relationship
-- [ ] Tenant isolation tests
+## Phase 2 — Identity / Multi-Tenancy ✅
+- [x] Unique constraint: merchant_id + user_id on MerchantUser
+- [x] Unique constraint: product_id + merchant_id on Product
+- [x] Transaction.buyer_id FK → users.user_id
+- [x] Transaction.merchant_id FK → merchants.merchant_id + index
+- [x] WebhookEvent(provider, provider_event_id) unique constraint
+- [x] WebhookProcessingStatus proper Enum (Phase 7 item)
+- [x] Alembic migration generated (e7e53d88625f)
+- [x] 6 tenant isolation tests (unique constraints, buyer scoping, cross-merchant, audit scoping)
+- [x] 59/59 tests passing
 
 ## Phase 3 — Buyer Policy Engine
 - [ ] BuyerProfile.daily_limit_inr enforcement

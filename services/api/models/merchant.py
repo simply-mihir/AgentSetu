@@ -1,4 +1,5 @@
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import UniqueConstraint
 from typing import Optional, List
 from datetime import datetime
 import json
@@ -6,6 +7,9 @@ import json
 
 class Product(SQLModel, table=True):
     __tablename__ = "products"
+    __table_args__ = (
+        UniqueConstraint("product_id", "merchant_id", name="uq_product_merchant"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     product_id: str = Field(index=True)
