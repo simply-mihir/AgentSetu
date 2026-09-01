@@ -16,11 +16,55 @@ from config import settings
 from database import create_db_and_tables, engine
 from routes import api_router
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-)
+
+# ── Phase 21: Structured logging ─────────────────────────────────────────────
+class _JSONFormatter(logging.Formatter):
+    """Emit one JSON object per log line for production log aggregators."""
+    def format(self, record):
+        log_obj = {
+            "ts": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+        }
+        if record.exc_info and record.exc_info[0]:
+            log_obj["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_obj, default=str)
+
+
+def _configure_logging():
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    # Clear existing handlers to avoid double logging
+    root.handlers.clear()
+    handler = logging.StreamHandler()
+    if settings.log_format == "json":
+        handler.setFormatter(_JSONFormatter())
+    else:
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+        ))
+    root.addHandler(handler)
+
+
+_configure_logging()
 logger = logging.getLogger("agentsetu")
+
+# ── Phase 21: Sentry integration (feature-flagged) ───────────────────────────
+if settings.sentry_dsn:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.environment,
+            traces_sample_rate=0.1 if settings.is_production else 1.0,
+            integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+        )
+        logger.info("Sentry initialized")
+    except ImportError:
+        logger.warning("sentry_dsn set but sentry-sdk not installed — skipping")
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
 import os as _os
@@ -230,10 +274,16 @@ app.add_middleware(
 )
 
 
-# ── Request ID + Security Headers middleware ─────────────────────────────────
+# ── Request ID + Security Headers + Logging middleware ────────────────────────
+import time as _time
+
+_access_logger = logging.getLogger("agentsetu.access")
+
+
 @app.middleware("http")
 async def add_request_id_and_security_headers(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex[:8]}"
+    t0 = _time.monotonic()
 
     # Phase 14: Request body size limit (1 MB) — reject before processing
     content_length = request.headers.get("content-length")
@@ -251,6 +301,8 @@ async def add_request_id_and_security_headers(request: Request, call_next):
         )
 
     response = await call_next(request)
+    latency_ms = round((_time.monotonic() - t0) * 1000, 1)
+
     response.headers["X-Request-ID"] = request_id
     # Phase 14 / Phase 23: Security headers
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -260,6 +312,15 @@ async def add_request_id_and_security_headers(request: Request, call_next):
     response.headers["Cache-Control"] = "no-store"
     if settings.is_production:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    # Phase 21: Access logging — skip health probes to reduce noise
+    path = request.url.path
+    if path not in ("/health", "/ready"):
+        _access_logger.info(
+            "%s %s %s %sms %s",
+            request.method, path, response.status_code, latency_ms, request_id,
+        )
+
     return response
 
 
