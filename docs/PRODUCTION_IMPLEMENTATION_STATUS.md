@@ -2,7 +2,7 @@
 
 **Baseline checkpoint:** `c87dba4` on `main` (2026-09-01)  
 **Baseline tests:** 41/41 passing  
-**Current tests:** 59/59 passing  
+**Current tests:** 77/77 passing  
 **Frontend build:** clean  
 
 ---
@@ -38,12 +38,14 @@
 - [x] 6 tenant isolation tests (unique constraints, buyer scoping, cross-merchant, audit scoping)
 - [x] 59/59 tests passing
 
-## Phase 3 — Buyer Policy Engine
-- [ ] BuyerProfile.daily_limit_inr enforcement
-- [ ] BuyerProfile.blocked_merchants enforcement
-- [ ] BuyerProfile.blocked_categories enforcement
-- [ ] Dead policy branch cleanup
-- [ ] Policy engine tests for all buyer profile rules
+## Phase 3 — Buyer Policy Engine ✅
+- [x] BuyerProfile.daily_limit_inr enforcement (calculates daily spend from DB)
+- [x] BuyerProfile.blocked_merchants enforcement (BUYER_BLOCKED_MERCHANT)
+- [x] BuyerProfile.blocked_categories enforcement (BUYER_BLOCKED_CATEGORY, case-insensitive)
+- [x] BuyerPolicyContext dataclass — clean interface between route and engine
+- [x] Payment route builds full context from BuyerProfile + daily spend query
+- [x] 18 buyer policy unit tests (blocked, daily limit, priority, backward compat)
+- [x] 77/77 tests passing
 
 ## Phase 4 — Capability Hardening
 - [ ] Bind buyer_id to authenticated buyer
