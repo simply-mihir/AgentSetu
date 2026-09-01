@@ -1,4 +1,12 @@
-"""ARM (Agent-Readable Manifest) schema definitions."""
+"""
+ARM (Agent-Readable Manifest) schema definitions.
+arm-0.2: Added manifest_id, generated_at, manifest_hash, removed payment_link_id
+from product-level data (internal implementation detail).
+"""
+import hashlib
+import json
+import uuid
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
@@ -14,7 +22,9 @@ class ARMProduct(BaseModel):
     return_policy: str
     merchant_rating: float
     description: str = ""
-    payment: Optional[dict] = None
+    # Phase 9: payment_link_id REMOVED from ARM products.
+    # It is an internal Razorpay reference that must never leak into the manifest.
+    # The payment provider info lives at manifest level only.
 
 
 class ARMPolicies(BaseModel):
@@ -33,7 +43,10 @@ class ARMMerchant(BaseModel):
 
 
 class ARMManifest(BaseModel):
-    schema_version: str = "arm-0.1"
+    schema_version: str = "arm-0.2"
+    manifest_id: str = Field(default_factory=lambda: f"arm_{uuid.uuid4().hex[:12]}")
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    manifest_hash: str = ""     # Computed after serialization
     merchant: ARMMerchant
     products: List[ARMProduct]
     policies: ARMPolicies
@@ -41,6 +54,16 @@ class ARMManifest(BaseModel):
         "provider": "razorpay",
         "type": "payment_link"
     })
+
+    def compute_hash(self) -> str:
+        """Compute SHA-256 hash of manifest content (excluding per-generation fields)."""
+        data = self.model_dump()
+        data.pop("manifest_hash", None)
+        data.pop("manifest_id", None)   # unique per generation
+        data.pop("generated_at", None)  # timestamp per generation
+        return hashlib.sha256(
+            json.dumps(data, sort_keys=True, default=str).encode()
+        ).hexdigest()
 
 
 class MerchantImportRequest(BaseModel):

@@ -1,5 +1,4 @@
 """ARM manifest generator from merchant DB records."""
-import json
 from typing import Optional
 from sqlmodel import Session, select
 from models.merchant import Merchant, Product
@@ -22,10 +21,8 @@ def generate_arm(merchant: Merchant, products: list[Product]) -> ARMManifest:
             return_policy=p.return_policy,
             merchant_rating=p.merchant_rating,
             description=p.description,
-            payment={
-                "provider": "razorpay",
-                "payment_link_id": p.payment_link_id or ""
-            }
+            # Phase 9: payment_link_id intentionally NOT included.
+            # ARM is a public-facing manifest; internal payment references stay server-side.
         ))
 
     manifest = ARMManifest(
@@ -45,6 +42,8 @@ def generate_arm(merchant: Merchant, products: list[Product]) -> ARMManifest:
         ),
         payment={"provider": "razorpay", "type": "payment_link"}
     )
+    # Phase 9: compute content hash for integrity verification
+    manifest.manifest_hash = manifest.compute_hash()
     return manifest
 
 

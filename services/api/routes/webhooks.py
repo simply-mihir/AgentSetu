@@ -11,7 +11,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends
 from sqlmodel import Session, select
 
 from database import get_session
-from models.transaction import Transaction, TransactionState
+from models.transaction import Transaction, TransactionState, validate_transition
 from models.webhook import WebhookEvent
 from payments.razorpay_adapter import razorpay_adapter, PaymentStatus
 from audit.service import audit_service
@@ -56,22 +56,33 @@ async def razorpay_webhook(request: Request, session: Session = Depends(get_sess
     provider_event_id = payload.get("id") or payload.get("event_id") or hashlib.sha256(body).hexdigest()[:32]
 
     # ── 3. Idempotency check — skip duplicate events ──────────────────────────
+    # Phase 7 fix: check BOTH RECEIVED (in-flight) and PROCESSED to prevent
+    # concurrent duplicate processing. A webhook in RECEIVED state is already
+    # being handled by another request.
     existing = session.exec(
         select(WebhookEvent).where(
             WebhookEvent.provider == "razorpay",
             WebhookEvent.provider_event_id == provider_event_id,
-            WebhookEvent.processing_status == "PROCESSED",
         )
     ).first()
     if existing:
-        logger.info(f"Webhook duplicate skipped: {provider_event_id}")
-        return {"received": True, "duplicate": True, "webhook_id": existing.webhook_id}
-
-    # ── 4. Persist the raw event ──────────────────────────────────────────────
-    wh_event = _persist_webhook_event(
-        session, body, provider_event_id=provider_event_id,
-        event_type=event_type, sig_valid=True, status="RECEIVED"
-    )
+        if existing.processing_status in ("RECEIVED", "PROCESSED"):
+            logger.info(f"Webhook duplicate skipped: {provider_event_id} (status={existing.processing_status})")
+            return {"received": True, "duplicate": True, "webhook_id": existing.webhook_id}
+        # FAILED records can be retried — reuse the existing record
+        logger.info(f"Webhook retry for FAILED event: {provider_event_id}")
+        existing.processing_status = "RECEIVED"
+        existing.error_message = None
+        existing.processed_at = None
+        session.add(existing)
+        session.commit()
+        wh_event = existing
+    else:
+        # ── 4. Persist the raw event ──────────────────────────────────────────
+        wh_event = _persist_webhook_event(
+            session, body, provider_event_id=provider_event_id,
+            event_type=event_type, sig_valid=True, status="RECEIVED"
+        )
 
     # ── 5. Extract entity data ────────────────────────────────────────────────
     entity = (
@@ -114,6 +125,15 @@ async def razorpay_webhook(request: Request, session: Session = Depends(get_sess
     else:
         new_state = TransactionState.PAYMENT_UNKNOWN
         result = "status_unknown"
+
+    # Phase 7: Validate state transition before mutating
+    if not validate_transition(old_state, new_state):
+        logger.warning(
+            f"Webhook: illegal transition {old_state}→{new_state} for txn={txn.transaction_id}, skipping"
+        )
+        _mark_webhook_processed(session, wh_event, status="FAILED", error=f"illegal_transition:{old_state}→{new_state}")
+        session.commit()
+        return {"received": True, "matched": True, "skipped": True, "reason": "illegal_transition"}
 
     txn.state = new_state
     txn.updated_at = datetime.utcnow()
