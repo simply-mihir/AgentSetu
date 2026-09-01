@@ -17,7 +17,7 @@ from sqlmodel import Session, select
 
 from database import get_session
 from models.merchant import Merchant, Product
-from models.transaction import Transaction, TransactionState
+from models.transaction import Transaction, TransactionState, validate_transition
 from models.user import User, UserRole
 from models.merchant_user import MerchantUser
 from policy.engine import PolicyEngine, PolicyDecision
@@ -262,12 +262,20 @@ async def select_product(
         select(Merchant).where(Merchant.merchant_id == request.merchant_id)
     ).first()
 
+    # Phase 5: validate state transition — select is only valid from DRAFT
+    target_state = TransactionState.PENDING_APPROVAL
+    if not validate_transition(txn.state, target_state):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot select product in state: {txn.state}",
+        )
+
     txn.product_id = product.product_id
     txn.product_name = product.name
     txn.merchant_id = merchant.merchant_id
     txn.merchant_name = merchant.name
     txn.amount_inr = product.price_inr
-    txn.state = TransactionState.PENDING_APPROVAL
+    txn.state = target_state
     txn.updated_at = datetime.utcnow()
 
     session.add(txn)

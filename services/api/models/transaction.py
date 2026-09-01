@@ -20,6 +20,54 @@ class TransactionState(str, Enum):
     RECOVERY_PROPOSED = "RECOVERY_PROPOSED"
 
 
+# ── Allowed state transitions ────────────────────────────────────────────────
+# Phase 5: explicit transition map — any transition not listed here is illegal.
+ALLOWED_TRANSITIONS: dict[TransactionState, set[TransactionState]] = {
+    TransactionState.DRAFT: {
+        TransactionState.PENDING_APPROVAL,
+        TransactionState.APPROVED,
+        TransactionState.CANCELLED,
+    },
+    TransactionState.PENDING_APPROVAL: {
+        TransactionState.APPROVED,
+        TransactionState.CANCELLED,
+        TransactionState.PAYMENT_LINK_CREATED,  # auto-approved path
+    },
+    TransactionState.APPROVED: {
+        TransactionState.PAYMENT_LINK_CREATED,
+        TransactionState.CANCELLED,
+        TransactionState.DRAFT,  # price change → reset to DRAFT
+    },
+    TransactionState.PAYMENT_LINK_CREATED: {
+        TransactionState.PAYMENT_SUCCESS,
+        TransactionState.PAYMENT_FAILED,
+        TransactionState.PAYMENT_UNKNOWN,
+    },
+    TransactionState.PAYMENT_SUCCESS: {
+        TransactionState.RECEIPT_ISSUED,
+    },
+    TransactionState.PAYMENT_FAILED: {
+        TransactionState.RECOVERY_PROPOSED,
+    },
+    TransactionState.PAYMENT_UNKNOWN: {
+        TransactionState.RECOVERY_PROPOSED,
+        TransactionState.PAYMENT_SUCCESS,  # resolved via webhook/verify
+        TransactionState.PAYMENT_FAILED,
+    },
+    TransactionState.RECEIPT_ISSUED: set(),  # terminal
+    TransactionState.RECOVERY_PROPOSED: set(),  # terminal (buyer starts new txn)
+    TransactionState.CANCELLED: set(),  # terminal
+    TransactionState.VERIFIED_SUCCESS: set(),  # legacy
+    TransactionState.VERIFIED_FAILED: set(),  # legacy
+}
+
+
+def validate_transition(current: TransactionState, target: TransactionState) -> bool:
+    """Return True if the transition from current → target is legal."""
+    allowed = ALLOWED_TRANSITIONS.get(current, set())
+    return target in allowed
+
+
 class Transaction(SQLModel, table=True):
     __tablename__ = "transactions"
 

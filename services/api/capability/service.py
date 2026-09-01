@@ -139,27 +139,58 @@ class CapabilityService:
         transaction_id: str,
         merchant_id: str,
         amount_inr: int,
+        buyer_id: Optional[str] = None,
     ) -> tuple[bool, str]:
         """
         Validate and atomically consume a capability.
         Returns (success, reason). Second call always returns False, "CAPABILITY_CONSUMED".
-        """
-        is_valid, reason = self.validate_capability(
-            session, capability_id, transaction_id, merchant_id, amount_inr
-        )
-        if not is_valid:
-            return False, reason
 
+        Uses SELECT ... FOR UPDATE on PostgreSQL for row-level locking to prevent
+        double-consume under concurrent requests. Safe no-op on SQLite.
+        """
+        # Row-level lock: FOR UPDATE prevents two concurrent requests from both
+        # reading ACTIVE and both writing CONSUMED.
         cap = session.exec(
-            select(AuthorizationCapability).where(
-                AuthorizationCapability.capability_id == capability_id
-            )
+            select(AuthorizationCapability)
+            .where(AuthorizationCapability.capability_id == capability_id)
+            .with_for_update()
         ).first()
 
+        if not cap:
+            return False, "CAPABILITY_NOT_FOUND"
+
+        if cap.status == CapabilityStatus.CONSUMED:
+            return False, "CAPABILITY_CONSUMED"
+
+        if cap.status == CapabilityStatus.REVOKED:
+            return False, "CAPABILITY_REVOKED"
+
+        if cap.status == CapabilityStatus.EXPIRED or datetime.utcnow() > cap.expires_at:
+            if cap.status == CapabilityStatus.ACTIVE:
+                cap.status = CapabilityStatus.EXPIRED
+                session.add(cap)
+                session.flush()
+            return False, "CAPABILITY_EXPIRED"
+
+        # Binding checks
+        if cap.transaction_id != transaction_id:
+            return False, "CAPABILITY_TRANSACTION_MISMATCH"
+
+        if cap.merchant_id != merchant_id:
+            return False, "CAPABILITY_MERCHANT_MISMATCH"
+
+        if cap.amount_inr != amount_inr:
+            return False, "CAPABILITY_AMOUNT_MISMATCH"
+
+        # Phase 4: buyer_id binding validation
+        if buyer_id and cap.buyer_id and cap.buyer_id != buyer_id:
+            return False, "CAPABILITY_BUYER_MISMATCH"
+
+        # Atomically consume
         cap.status = CapabilityStatus.CONSUMED
         cap.consumed_at = datetime.utcnow()
         session.add(cap)
-        session.commit()
+        session.flush()  # flush within transaction — caller commits
         logger.info(f"Capability consumed: {capability_id} | txn={transaction_id}")
         return True, "OK"
 
