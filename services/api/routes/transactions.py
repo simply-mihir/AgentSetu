@@ -1,6 +1,10 @@
 """
 Transaction orchestration routes.
 Buyer intent → discovery → ranking → policy → approval → payment.
+
+SECURITY: All data-access endpoints require authentication.
+Buyer sees only their own transactions. Merchant users see their merchant's
+transactions. PLATFORM_ADMIN sees all.
 """
 import json
 import hashlib
@@ -14,9 +18,12 @@ from sqlmodel import Session, select
 from database import get_session
 from models.merchant import Merchant, Product
 from models.transaction import Transaction, TransactionState
+from models.user import User, UserRole
+from models.merchant_user import MerchantUser
 from policy.engine import PolicyEngine, PolicyDecision
 from ai.orchestrator import buyer_orchestrator
 from audit.service import audit_service
+from auth.dependencies import get_current_user, get_optional_user
 
 router = APIRouter()
 policy_engine = PolicyEngine()
@@ -24,7 +31,6 @@ policy_engine = PolicyEngine()
 
 class IntentRequest(BaseModel):
     message: str
-    buyer_limit_inr: Optional[int] = None
     session_id: Optional[str] = None
 
 
@@ -36,26 +42,46 @@ class SelectProductRequest(BaseModel):
 
 class ApproveRequest(BaseModel):
     transaction_id: str
-    approved_by: str = "buyer"
 
 
 class EvaluatePolicyRequest(BaseModel):
     merchant_id: str
     product_id: str
     amount_inr: int
-    buyer_limit_inr: Optional[int] = None
     is_approved: bool = False
 
 
 def make_fingerprint(merchant_id: str, product_id: str, amount: int, approval_id: str) -> str:
     payload = f"{merchant_id}:{product_id}:{amount}:{approval_id}"
-    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _assert_txn_access(txn: Transaction, user: User, session: Session):
+    """Raise 403 unless the user owns or is authorized for this transaction."""
+    if user.role == UserRole.PLATFORM_ADMIN:
+        return
+    if user.role == UserRole.BUYER:
+        if txn.buyer_id != user.user_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this transaction")
+        return
+    # Merchant roles — check membership
+    if txn.merchant_id:
+        membership = session.exec(
+            select(MerchantUser).where(
+                MerchantUser.merchant_id == txn.merchant_id,
+                MerchantUser.user_id == user.user_id,
+            )
+        ).first()
+        if membership:
+            return
+    raise HTTPException(status_code=403, detail="Not authorized for this transaction")
 
 
 @router.post("/intent", summary="Process buyer intent — discover + rank products")
 async def process_intent(
     request: IntentRequest,
     session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """
     Full buyer intent pipeline:
@@ -131,6 +157,7 @@ async def process_intent(
 
     # ── 4. Create transaction ─────────────────────────────────────────────────
     txn = Transaction(
+        buyer_id=current_user.user_id if current_user else None,
         buyer_intent=request.message,
         parsed_constraints=json.dumps(constraints),
         candidates_json=json.dumps(ranked[:5]),
@@ -145,9 +172,9 @@ async def process_intent(
         session=session,
         transaction_id=txn.transaction_id,
         correlation_id=txn.correlation_id,
-        actor="buyer",
+        actor=current_user.user_id if current_user else "anonymous",
         event_type="intent.received",
-        input_summary={"message": request.message, "buyer_limit_inr": request.buyer_limit_inr},
+        input_summary={"message": request.message},
         next_state="DRAFT",
         result="parsed",
     )
@@ -207,12 +234,20 @@ async def process_intent(
 async def select_product(
     request: SelectProductRequest,
     session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     txn = session.exec(
         select(Transaction).where(Transaction.transaction_id == request.transaction_id)
     ).first()
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
+
+    # If user is authenticated, bind or verify ownership
+    if current_user:
+        if txn.buyer_id and txn.buyer_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this transaction")
+        if not txn.buyer_id:
+            txn.buyer_id = current_user.user_id
 
     product = session.exec(
         select(Product).where(
@@ -276,7 +311,7 @@ async def evaluate_policy(
         merchant=merchant,
         product=product,
         amount_inr=request.amount_inr,
-        buyer_limit_inr=request.buyer_limit_inr,
+        buyer_limit_inr=None,
         is_approved=request.is_approved,
     )
 
@@ -296,6 +331,7 @@ async def evaluate_policy(
 async def approve_transaction(
     request: ApproveRequest,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     txn = session.exec(
         select(Transaction).where(Transaction.transaction_id == request.transaction_id)
@@ -303,16 +339,26 @@ async def approve_transaction(
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
+    # Only the buyer who owns this transaction (or PLATFORM_ADMIN) can approve
+    if current_user.role != UserRole.PLATFORM_ADMIN:
+        if txn.buyer_id and txn.buyer_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to approve this transaction")
+
     if txn.state not in [TransactionState.DRAFT, TransactionState.PENDING_APPROVAL]:
         raise HTTPException(status_code=400, detail=f"Cannot approve transaction in state: {txn.state}")
 
     approval_id = f"appr_{uuid.uuid4().hex[:8]}"
     txn.approval_id = approval_id
-    txn.approved_by = request.approved_by
+    # H1 FIX: approved_by derived from auth context, NEVER from request body
+    txn.approved_by = current_user.user_id
     txn.approved_at = datetime.utcnow()
     txn.state = TransactionState.APPROVED
 
-    # Generate fingerprint
+    # Bind buyer if not already bound
+    if not txn.buyer_id:
+        txn.buyer_id = current_user.user_id
+
+    # Generate fingerprint — full 64-char SHA-256 (M5 fix)
     if txn.merchant_id and txn.product_id and txn.amount_inr:
         txn.fingerprint = make_fingerprint(
             txn.merchant_id, txn.product_id, txn.amount_inr, approval_id
@@ -327,7 +373,7 @@ async def approve_transaction(
         session=session,
         transaction_id=txn.transaction_id,
         correlation_id=txn.correlation_id,
-        actor=request.approved_by,
+        actor=current_user.user_id,
         event_type="approval.granted",
         input_summary={
             "amount_inr": txn.amount_inr,
@@ -342,6 +388,7 @@ async def approve_transaction(
     return {
         "transaction_id": txn.transaction_id,
         "approval_id": approval_id,
+        "approved_by": txn.approved_by,
         "state": txn.state,
         "approved_at": txn.approved_at.isoformat(),
         "fingerprint": txn.fingerprint,
@@ -352,12 +399,15 @@ async def approve_transaction(
 async def get_transaction(
     transaction_id: str,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     txn = session.exec(
         select(Transaction).where(Transaction.transaction_id == transaction_id)
     ).first()
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
+
+    _assert_txn_access(txn, current_user, session)
 
     return {
         "transaction_id": txn.transaction_id,
@@ -384,10 +434,36 @@ async def get_transaction(
 
 
 @router.get("/", summary="List recent transactions")
-async def list_transactions(session: Session = Depends(get_session)):
-    txns = session.exec(
-        select(Transaction).order_by(Transaction.created_at.desc()).limit(20)
-    ).all()
+async def list_transactions(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    # Tenant-scoped query
+    if current_user.role == UserRole.PLATFORM_ADMIN:
+        query = select(Transaction).order_by(Transaction.created_at.desc()).limit(50)
+    elif current_user.role == UserRole.BUYER:
+        query = (
+            select(Transaction)
+            .where(Transaction.buyer_id == current_user.user_id)
+            .order_by(Transaction.created_at.desc())
+            .limit(50)
+        )
+    else:
+        # Merchant user — find their merchant_ids
+        memberships = session.exec(
+            select(MerchantUser).where(MerchantUser.user_id == current_user.user_id)
+        ).all()
+        merchant_ids = [m.merchant_id for m in memberships]
+        if not merchant_ids:
+            return []
+        query = (
+            select(Transaction)
+            .where(Transaction.merchant_id.in_(merchant_ids))
+            .order_by(Transaction.created_at.desc())
+            .limit(50)
+        )
+
+    txns = session.exec(query).all()
     return [
         {
             "transaction_id": t.transaction_id,

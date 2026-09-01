@@ -8,6 +8,8 @@ Integration test — complete purchase flows:
 Uses the shared conftest.py fixtures (StaticPool in-memory engine + setup_db).
 Do NOT override app.dependency_overrides or create a module-level engine here —
 doing so pollutes the shared app singleton and breaks subsequent test modules.
+
+All endpoints that require auth use the buyer_headers fixture.
 """
 import sys
 import os
@@ -54,7 +56,7 @@ def seeded_merchant(session):
 
 
 class TestAutoApprovedFlow:
-    def test_cheap_product_gets_allow(self, client, seeded_merchant):
+    def test_cheap_product_gets_allow(self, client, seeded_merchant, buyer_headers):
         """Product within auto-limit should get ALLOW without approval."""
         r = client.post("/v1/transactions/intent", json={"message": "buy cheap grocery"})
         assert r.status_code == 200
@@ -67,7 +69,11 @@ class TestAutoApprovedFlow:
         })
         assert r.status_code == 200
 
-        r = client.post("/v1/payments/payment-link", json={"transaction_id": txn_id})
+        r = client.post(
+            "/v1/payments/payment-link",
+            json={"transaction_id": txn_id},
+            headers=buyer_headers,
+        )
         # 502 = Razorpay demo key fails (expected in test mode); not a DENY
         assert r.status_code in (200, 400, 502)
         data = r.json()
@@ -76,7 +82,7 @@ class TestAutoApprovedFlow:
 
 
 class TestApprovalRequiredFlow:
-    def test_expensive_product_needs_approval(self, client, seeded_merchant):
+    def test_expensive_product_needs_approval(self, client, seeded_merchant, buyer_headers):
         """Product above auto-limit should require approval."""
         r = client.post("/v1/transactions/intent", json={"message": "buy expensive item"})
         assert r.status_code == 200
@@ -89,13 +95,17 @@ class TestApprovalRequiredFlow:
         })
         assert r.status_code == 200
 
-        r = client.post("/v1/payments/payment-link", json={"transaction_id": txn_id})
+        r = client.post(
+            "/v1/payments/payment-link",
+            json={"transaction_id": txn_id},
+            headers=buyer_headers,
+        )
         assert r.status_code == 200
         data = r.json()
         assert data["needs_approval"] is True
         assert data["state"] == "PENDING_APPROVAL"
 
-    def test_approval_then_payment_allowed(self, client, seeded_merchant):
+    def test_approval_then_payment_allowed(self, client, seeded_merchant, buyer_headers):
         """After buyer approves, payment should be allowed."""
         r = client.post("/v1/transactions/intent", json={"message": "buy expensive"})
         txn_id = r.json()["transaction_id"]
@@ -106,20 +116,25 @@ class TestApprovalRequiredFlow:
             "merchant_id": "int_merch_01",
         })
 
-        r = client.post("/v1/transactions/approve", json={
-            "transaction_id": txn_id,
-            "approved_by": "buyer",
-        })
+        r = client.post(
+            "/v1/transactions/approve",
+            json={"transaction_id": txn_id},
+            headers=buyer_headers,
+        )
         assert r.status_code == 200
         assert r.json()["state"] == "APPROVED"
 
         # With demo keys, Razorpay will fail → 502 is expected
-        r = client.post("/v1/payments/payment-link", json={"transaction_id": txn_id})
+        r = client.post(
+            "/v1/payments/payment-link",
+            json={"transaction_id": txn_id},
+            headers=buyer_headers,
+        )
         assert r.status_code in (200, 502)
 
 
 class TestBlockedFlow:
-    def test_inactive_merchant_blocked(self, client, session):
+    def test_inactive_merchant_blocked(self, client, session, buyer_headers):
         """Inactive merchant products should be DENIED."""
         from models.merchant import Merchant, Product
 
@@ -144,14 +159,18 @@ class TestBlockedFlow:
             "merchant_id": "inactive_merch",
         })
 
-        r = client.post("/v1/payments/payment-link", json={"transaction_id": txn_id})
+        r = client.post(
+            "/v1/payments/payment-link",
+            json={"transaction_id": txn_id},
+            headers=buyer_headers,
+        )
         assert r.status_code == 403
         body = r.json()
         assert "POLICY_BLOCKED" in str(body) or "MERCHANT_INACTIVE" in str(body)
 
 
 class TestIdempotency:
-    def test_duplicate_payment_link_request_returns_same(self, client, session, seeded_merchant):
+    def test_duplicate_payment_link_request_returns_same(self, client, session, seeded_merchant, buyer_headers):
         """Second payment-link request for same transaction should return existing link."""
         from models.transaction import Transaction, TransactionState
 
@@ -171,7 +190,11 @@ class TestIdempotency:
         session.refresh(txn)
         txn_id = txn.transaction_id
 
-        r = client.post("/v1/payments/payment-link", json={"transaction_id": txn_id})
+        r = client.post(
+            "/v1/payments/payment-link",
+            json={"transaction_id": txn_id},
+            headers=buyer_headers,
+        )
         assert r.status_code == 200
         data = r.json()
         assert data["idempotent"] is True

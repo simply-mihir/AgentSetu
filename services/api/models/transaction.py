@@ -34,6 +34,9 @@ class Transaction(SQLModel, table=True):
         index=True
     )
 
+    # Buyer identity — set from auth context, never from client
+    buyer_id: Optional[str] = Field(default=None, index=True)
+
     # Buyer intent
     buyer_intent: str = ""
     parsed_constraints: str = "{}"  # JSON

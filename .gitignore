@@ -14,8 +14,9 @@ var/
 sdist/
 develop-eggs/
 .installed.cfg
-lib/
-lib64/
+# Python virtualenv lib dirs (root-level only — do NOT match apps/web/lib/)
+/lib/
+/lib64/
 venv/
 .venv/
 env/

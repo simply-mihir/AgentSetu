@@ -6,6 +6,7 @@ SECURITY: Razorpay is called ONLY after:
   3. A capability has been issued AND consumed atomically
 
 No LLM touches this flow. Amount is verified server-side against DB.
+All endpoints require authentication (C2 fix).
 """
 import json
 from datetime import datetime
@@ -19,10 +20,13 @@ from slowapi.util import get_remote_address
 from database import get_session
 from models.merchant import Merchant, Product
 from models.transaction import Transaction, TransactionState
+from models.user import User, UserRole, BuyerProfile
+from models.merchant_user import MerchantUser
 from policy.engine import PolicyEngine, PolicyDecision
 from payments.razorpay_adapter import razorpay_adapter, PaymentStatus
 from capability.service import capability_service
 from audit.service import audit_service
+from auth.dependencies import get_current_user
 from errors import make_error, ErrorCode
 
 router = APIRouter()
@@ -32,7 +36,29 @@ limiter = Limiter(key_func=get_remote_address)
 
 class CreatePaymentLinkRequest(BaseModel):
     transaction_id: str
-    buyer_limit_inr: Optional[int] = None
+    # C5 FIX: buyer_limit_inr REMOVED from client request.
+    # Buyer limits are loaded server-side from BuyerProfile.
+
+
+def _assert_payment_txn_access(txn: Transaction, user: User, session: Session):
+    """Raise 403 unless the caller owns this transaction or is PLATFORM_ADMIN."""
+    if user.role == UserRole.PLATFORM_ADMIN:
+        return
+    if user.role == UserRole.BUYER:
+        if txn.buyer_id != user.user_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this transaction")
+        return
+    # Merchant roles — check membership
+    if txn.merchant_id:
+        membership = session.exec(
+            select(MerchantUser).where(
+                MerchantUser.merchant_id == txn.merchant_id,
+                MerchantUser.user_id == user.user_id,
+            )
+        ).first()
+        if membership:
+            return
+    raise HTTPException(status_code=403, detail="Not authorized for this transaction")
 
 
 @router.post("/payment-link", summary="Create Razorpay Payment Link (after authorization)")
@@ -41,16 +67,18 @@ async def create_payment_link(
     request: Request,
     body: CreatePaymentLinkRequest,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Full payment gate:
-    1. Load transaction + verify state
+    1. Load transaction + verify state + verify caller authorization
     2. Verify amount has not changed
-    3. Policy engine final check (deterministic)
-    4. Issue capability
-    5. Consume capability atomically
-    6. Call Razorpay (server-side only)
-    7. Record audit event
+    3. Load buyer limits from DB (never from client)
+    4. Policy engine final check (deterministic)
+    5. Issue capability (bound to buyer)
+    6. Consume capability atomically
+    7. Call Razorpay (server-side only)
+    8. Record audit event
     """
     txn = session.exec(
         select(Transaction).where(Transaction.transaction_id == body.transaction_id)
@@ -59,6 +87,17 @@ async def create_payment_link(
         raise HTTPException(status_code=404, detail=make_error(
             ErrorCode.NOT_FOUND, "Transaction not found.", 404
         ).body.decode())
+
+    # Bind buyer if not already bound (MUST happen before the access check
+    # so that anonymously-created transactions are claimed by the first
+    # authenticated buyer, then the access check compares matching IDs).
+    if not txn.buyer_id and current_user.role == UserRole.BUYER:
+        txn.buyer_id = current_user.user_id
+        session.add(txn)
+        session.flush()
+
+    # C2 FIX: verify caller is authorized for this transaction
+    _assert_payment_txn_access(txn, current_user, session)
 
     # ── Idempotency: return existing link if already created ──────────────────
     if txn.razorpay_payment_link_id and txn.state in [
@@ -108,7 +147,6 @@ async def create_payment_link(
 
     # ── Server-side price verification — catch price changes ──────────────────
     if product.price_inr != txn.amount_inr:
-        # Price has changed since selection — revoke any capability and block
         capability_service.revoke_for_transaction(session, txn.transaction_id, reason="price_changed")
         txn.state = TransactionState.DRAFT
         txn.amount_inr = product.price_inr
@@ -128,13 +166,22 @@ async def create_payment_link(
             ErrorCode.INVENTORY_CHANGED, "Product is no longer available.", 409
         ).body.decode())
 
+    # ── C5 FIX: Load buyer limit from DB, never from client ──────────────────
+    buyer_limit_inr = None
+    if current_user.role == UserRole.BUYER:
+        buyer_profile = session.exec(
+            select(BuyerProfile).where(BuyerProfile.user_id == current_user.user_id)
+        ).first()
+        if buyer_profile:
+            buyer_limit_inr = buyer_profile.per_transaction_auto_limit_inr
+
     # ── Deterministic policy check (final gate) ───────────────────────────────
     is_approved = txn.state == TransactionState.APPROVED and txn.approval_id is not None
     policy_result = policy_engine.evaluate(
         merchant=merchant,
         product=product,
         amount_inr=txn.amount_inr,
-        buyer_limit_inr=body.buyer_limit_inr,
+        buyer_limit_inr=buyer_limit_inr,
         is_approved=is_approved,
     )
 
@@ -147,7 +194,7 @@ async def create_payment_link(
         correlation_id=txn.correlation_id,
         actor="agentsetu",
         event_type="policy.decision",
-        input_summary={"amount_inr": txn.amount_inr, "is_approved": is_approved},
+        input_summary={"amount_inr": txn.amount_inr, "is_approved": is_approved, "buyer_limit_inr": buyer_limit_inr},
         decision=policy_result.decision,
         reason_codes=policy_result.reason_codes,
         policy_result=policy_result.decision,
@@ -196,7 +243,7 @@ async def create_payment_link(
         product_id=txn.product_id,
         amount_inr=txn.amount_inr,
         approval_id=txn.approval_id,
-        buyer_id=None,  # Future: bind to authenticated buyer_id
+        buyer_id=current_user.user_id,
     )
 
     ok, reason = capability_service.consume_capability(
@@ -282,6 +329,7 @@ async def create_payment_link(
 async def verify_payment(
     transaction_id: str,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Explicitly verify Razorpay payment status.
@@ -294,6 +342,8 @@ async def verify_payment(
         raise HTTPException(status_code=404, detail=make_error(
             ErrorCode.NOT_FOUND, "Transaction not found.", 404
         ).body.decode())
+
+    _assert_payment_txn_access(txn, current_user, session)
 
     if not txn.razorpay_payment_link_id:
         raise HTTPException(status_code=400, detail=make_error(
@@ -374,6 +424,7 @@ async def verify_payment(
 async def get_receipt(
     transaction_id: str,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     import hashlib
     txn = session.exec(
@@ -383,6 +434,8 @@ async def get_receipt(
         raise HTTPException(status_code=404, detail=make_error(
             ErrorCode.NOT_FOUND, "Transaction not found.", 404
         ).body.decode())
+
+    _assert_payment_txn_access(txn, current_user, session)
 
     from models.audit import AuditEvent
     events = session.exec(
