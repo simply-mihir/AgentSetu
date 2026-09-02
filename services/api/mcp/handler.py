@@ -177,7 +177,7 @@ async def _get_merchant_arm(
 async def _list_merchants(
     args: dict[str, Any], session: Session, user: Optional[User],
 ) -> dict[str, Any]:
-    merchants = session.exec(select(Merchant).where(Merchant.is_active == True)).all()
+    merchants = session.exec(select(Merchant).where(Merchant.is_active.is_(True))).all()
     result = []
     for m in merchants:
         product_count = len(session.exec(

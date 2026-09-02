@@ -10,7 +10,6 @@ All endpoints require authentication (C2 fix).
 """
 import json
 from datetime import datetime, timedelta
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -20,7 +19,7 @@ from slowapi.util import get_remote_address
 
 from database import get_session
 from models.merchant import Merchant, Product
-from models.transaction import Transaction, TransactionState, validate_transition
+from models.transaction import Transaction, TransactionState
 from models.user import User, UserRole, BuyerProfile
 from models.merchant_user import MerchantUser
 from models.idempotency import IdempotencyRecord

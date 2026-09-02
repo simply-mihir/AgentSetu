@@ -5,7 +5,6 @@ Idempotent: always checks existing state before creating.
 """
 import hashlib
 import hmac
-import json
 import logging
 from dataclasses import dataclass
 from enum import Enum

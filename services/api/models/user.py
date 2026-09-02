@@ -1,6 +1,6 @@
 """User and BuyerProfile models."""
-from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, List
+from sqlmodel import SQLModel, Field
+from typing import Optional
 from datetime import datetime
 from enum import Enum
 import uuid

@@ -12,7 +12,6 @@ from database import get_session
 from models.user import User, UserRole, UserStatus
 from models.merchant_user import MerchantUser
 from auth.jwt import decode_access_token
-from config import settings
 
 logger = logging.getLogger(__name__)
 bearer = HTTPBearer(auto_error=False)

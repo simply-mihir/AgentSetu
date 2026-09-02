@@ -7,7 +7,7 @@ SECURITY (C4 fix): All endpoints require authentication.
 - PLATFORM_ADMIN sees all events.
 """
 import json
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 
 from database import get_session

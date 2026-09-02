@@ -20,7 +20,7 @@ from sqlmodel import Session
 from database import get_session
 from models.user import User
 from auth.dependencies import get_optional_user
-from mcp.tools import TOOLS, PUBLIC_TOOLS
+from mcp.tools import TOOLS
 from mcp.handler import handle_tool_call, MCPError
 
 logger = logging.getLogger("agentsetu.mcp")
@@ -92,7 +92,7 @@ async def call_tool(
             },
         )
 
-    except Exception as e:
+    except Exception:
         logger.exception("Unexpected MCP error: %s", request.name)
         raise HTTPException(
             status_code=500,

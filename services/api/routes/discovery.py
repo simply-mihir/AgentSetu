@@ -1,5 +1,5 @@
 """Discovery routes — search merchants and products by agent constraints."""
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 from database import get_session

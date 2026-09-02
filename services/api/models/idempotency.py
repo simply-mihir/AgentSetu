@@ -3,7 +3,6 @@ from sqlmodel import SQLModel, Field
 from sqlalchemy import UniqueConstraint
 from typing import Optional
 from datetime import datetime
-import uuid
 
 
 class IdempotencyRecord(SQLModel, table=True):
