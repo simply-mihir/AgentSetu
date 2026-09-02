@@ -2,7 +2,7 @@
 
 > Deploy the full AgentSetu prototype — backend, frontend, database, Redis, payments, AI, and observability — at **₹0/month** using only free tiers and Razorpay Test Mode.
 >
-> Time: ~45 minutes.
+> Time: ~50 minutes.
 
 ---
 
@@ -23,10 +23,9 @@
             ┌───────────┘    │     └───────────┐
             ▼                ▼                  ▼
    ┌──────────────┐ ┌───────────────┐ ┌──────────────┐
-   │  Supabase    │ │ Upstash (Free)│ │ Sentry (Free)│
+   │  Neon (Free) │ │ Upstash (Free)│ │ Sentry (Free)│
    │  PostgreSQL  │ │ Redis         │ │ Errors       │
-   │  (Free)      │ └───────────────┘ └──────────────┘
-   └──────────────┘
+   └──────────────┘ └───────────────┘ └──────────────┘
                     ┌──────────────────┐
                     │  Razorpay        │
                     │  Test Mode       │
@@ -43,7 +42,7 @@
 
 | Component | Provider | Free Tier Limits | Credit Card? |
 |-----------|----------|-----------------|-------------|
-| **Database** | Supabase PostgreSQL 15 | 500 MB storage, 2 projects, no expiry | No |
+| **Database** | Neon PostgreSQL 16 | 0.5 GB storage, 190 compute-hours/mo, no expiry | No |
 | **Redis** | Upstash | 10K commands/day, 256 MB | No |
 | **Backend** | Render Web Service | 750 hours/mo, spins down after 15 min idle | No |
 | **Frontend** | Vercel Hobby | 100 GB bandwidth, automatic HTTPS, Edge CDN | No |
@@ -53,7 +52,7 @@
 
 **Why these providers?**
 
-- **Supabase** over Neon — 500 MB (vs 0.5 GB), no compute-hour limit, built-in dashboard, direct PostgreSQL connection string
+- **Neon** — compute autosuspends after 5 min idle but **auto-wakes on next query** (~1s). No manual intervention, no project pause, no inactivity expiry. Project stays alive indefinitely.
 - **Groq** over OpenAI — completely free (no credit card), OpenAI-compatible API (same Python SDK, just different base URL), Llama 3.3 70B matches gpt-4o-mini quality for intent parsing
 - **Upstash** over self-hosted Redis — serverless, no container needed
 - **Render** over Railway — no credit card required for free tier
@@ -66,7 +65,7 @@
 Sign up for all of these before starting. **None require a credit card.**
 
 - [ ] **GitHub** — you likely have this. Required for Render and Vercel deploys.
-- [ ] **Supabase** — [supabase.com](https://supabase.com) — sign up with GitHub
+- [ ] **Neon** — [neon.tech](https://neon.tech) — sign up with GitHub
 - [ ] **Upstash** — [upstash.com](https://upstash.com) — sign up with GitHub
 - [ ] **Render** — [render.com](https://render.com) — sign up with GitHub
 - [ ] **Vercel** — [vercel.com](https://vercel.com) — sign up with GitHub
@@ -76,58 +75,52 @@ Sign up for all of these before starting. **None require a credit card.**
 
 ---
 
-## Step 1 — Database (Supabase PostgreSQL)
+## Step 1 — Database (Neon PostgreSQL)
 
-1. Go to **supabase.com** → **New project**
-2. Organization: create one (or use existing)
+1. Go to **neon.tech** → click **Sign Up** → **Continue with GitHub**
+2. Click **Create a project**
 3. Configure:
-   - **Name:** `agentsetu`
-   - **Database Password:** generate a strong password and **save it** — you need it for the connection string
-   - **Region:** pick the one closest to your Render region (e.g., `ap-south-1` Mumbai, or `us-west-1` N. California)
-   - **Plan:** Free
-4. Wait for the project to finish provisioning (~2 minutes)
-5. Go to **Settings → Database → Connection string → URI**
-6. Select **Mode: Session** (for connection pooler compatibility)
-7. Copy the connection string. It looks like:
+   - **Project name:** `agentsetu`
+   - **Postgres version:** `16`
+   - **Region:** pick the closest to you. India: `Asia Pacific (Mumbai)`. US: `US West (Oregon)`.
+4. Click **Create project**. It provisions in ~10 seconds.
+5. You'll see a **Connection Details** panel immediately. Copy the **Connection string**. It looks like:
 
 ```
-postgresql://postgres.abcdefghijk:[YOUR-PASSWORD]@aws-0-ap-south-1.pooler.supabase.com:6543/postgres
+postgresql://agentsetu_owner:AbCdEf123456@ep-cool-darkness-123456.ap-southeast-1.aws.neon.tech/agentsetu?sslmode=require
 ```
 
-Replace `[YOUR-PASSWORD]` with the password you set in step 3.
+6. Save this as your `DATABASE_URL`
 
-8. Save this as your `DATABASE_URL`
-
-> **Important:** Use the **Session mode** (port `6543`) connection string, not the direct connection (port `5432`). Session mode goes through Supabase's connection pooler, which handles idle connection cleanup — important for a free-tier backend that sleeps and wakes.
+> **How Neon free tier works:** compute autosuspends after 5 minutes of inactivity. When the next database query arrives, it auto-wakes in ~1 second — completely transparent, no manual action needed. The project itself **never pauses or expires**.
 
 ### Run migrations (optional)
 
-You can run Alembic migrations locally against the Supabase database, or let the app auto-create tables on first boot (demo/sandbox mode calls `create_db_and_tables()`).
+You can run Alembic migrations locally, or let the app auto-create tables on first boot (demo/sandbox mode calls `create_db_and_tables()`).
 
 ```bash
 # From services/api/ with your venv activated
-export DATABASE_URL="postgresql://postgres.abcdefghijk:YOUR_PASSWORD@aws-0-ap-south-1.pooler.supabase.com:6543/postgres"
+export DATABASE_URL="postgresql://...your-neon-url..."
 alembic upgrade head
 ```
 
-### Supabase free tier limits
+### Neon free tier limits
 
 | Resource | Limit |
 |----------|-------|
-| Storage | 500 MB |
-| Bandwidth | 5 GB |
-| Projects | 2 |
-| Edge functions | 500K invocations/mo |
-| Pause after inactivity | 7 days (you can unpause from dashboard) |
-
-> **Auto-pause:** Supabase pauses free projects after 7 days of no API requests. The prototype's regular use prevents this. If it pauses, unpause from the Supabase dashboard (takes ~1 minute).
+| Storage | 0.5 GB |
+| Compute hours | 190/month |
+| Branches | 10 |
+| Projects | 10 |
+| Auto-suspend | After 5 min idle (auto-wakes on query) |
+| Expiry | **Never** — no inactivity deletion |
 
 ---
 
 ## Step 2 — Redis (Upstash)
 
 1. Go to **console.upstash.com** → Create a new **Redis** database
-2. Name: `agentsetu`. Region: same as your Supabase project
+2. Name: `agentsetu`. Region: same as your Neon project
 3. Select **TLS** enabled (default)
 4. Copy the **Redis URL** from the dashboard. Format:
 
@@ -191,7 +184,7 @@ Render deploys from a GitHub repo. Make sure your AgentSetu repo is pushed and u
 | Setting | Value |
 |---------|-------|
 | Name | `agentsetu-api` |
-| Region | Same as Supabase (e.g., Singapore or Oregon) |
+| Region | Same as Neon (e.g., Singapore or Oregon) |
 | Branch | `main` |
 | Root Directory | `services/api` |
 | Runtime | Docker |
@@ -294,7 +287,7 @@ Set all of these in Render's **Environment** tab.
 |----------|-------|----------|
 | `APP_MODE` | `demo` or `sandbox` | ✅ |
 | `ENVIRONMENT` | `staging` | ✅ |
-| `DATABASE_URL` | Supabase connection string (Session mode, port 6543) | ✅ |
+| `DATABASE_URL` | Neon connection string (with `?sslmode=require`) | ✅ |
 | `REDIS_URL` | Upstash Redis URL (`rediss://...`) | ✅ |
 | `SECRET_KEY` | Random 64-char hex ¹ | ✅ |
 | `ENCRYPTION_KEY` | Random 64-char hex ¹ | ✅ |
@@ -339,7 +332,7 @@ Set all of these in Render's **Environment** tab.
 
 Follow this exact order to avoid circular dependency issues:
 
-- [ ] **1.** Create Supabase project → get `DATABASE_URL` (Session mode, port 6543)
+- [ ] **1.** Create Neon project → get `DATABASE_URL`
 - [ ] **2.** Create Upstash Redis → get `REDIS_URL`
 - [ ] **3.** Create Razorpay Test Mode keys → get key ID, secret, webhook secret
 - [ ] **4.** Create Groq API key → get `OPENAI_API_KEY`
@@ -432,11 +425,9 @@ Receipt generated + audit event logged
 
 Render free tier spins down after 15 min idle. Hit `/health` before demos. Set up [UptimeRobot](https://uptimerobot.com) (free, 50 monitors) to ping every 5 min.
 
-### "connection refused" or database errors
+### Database connection slow on first query
 
-- Check that your Supabase connection string uses **Session mode** (port `6543`), not direct (port `5432`)
-- Supabase pauses free projects after 7 days of no API requests — unpause from the Supabase dashboard
-- If switching from SQLite to PostgreSQL, the first boot creates all tables automatically in demo/sandbox mode
+Neon autosuspends compute after 5 min idle. The first query after wake takes ~1 second — this is normal and automatic. No manual action needed. If you get persistent connection errors, check that `?sslmode=require` is in the URL.
 
 ### CORS errors in browser console
 
@@ -472,7 +463,7 @@ Free tier has 512 MB RAM. Switch to the native Python runtime:
 
 | Service | Tier | Monthly Cost |
 |---------|------|-------------|
-| Supabase PostgreSQL | Free | ₹0 |
+| Neon PostgreSQL | Free | ₹0 |
 | Upstash Redis | Free | ₹0 |
 | Render (Backend) | Free | ₹0 |
 | Vercel (Frontend) | Hobby | ₹0 |
@@ -482,7 +473,7 @@ Free tier has 512 MB RAM. Switch to the native Python runtime:
 
 ### **Total: ₹0/month**
 
-No credit card required for any service. Every component runs on a genuinely free tier with no trial expiry.
+No credit card required for any service. Every component runs on a genuinely free tier with no trial expiry and no inactivity deletion.
 
 ---
 
@@ -494,8 +485,8 @@ The architecture is provider-agnostic. To switch any component:
 |---------------|--------|
 | Groq → OpenAI | Remove `OPENAI_BASE_URL`, set OpenAI key, model = `gpt-4o-mini` |
 | Groq → Together AI | `OPENAI_BASE_URL=https://api.together.xyz/v1`, Together key |
-| Supabase → Neon | Change `DATABASE_URL` to Neon connection string |
-| Supabase → Railway Postgres | Change `DATABASE_URL` to Railway connection string |
+| Neon → Supabase | Change `DATABASE_URL` to Supabase connection string (Session mode, port 6543) |
+| Neon → Railway Postgres | Change `DATABASE_URL` to Railway connection string |
 | Upstash → Railway Redis | Change `REDIS_URL` to Railway Redis URL |
 | Render → Railway | Same Docker image, different platform |
 
