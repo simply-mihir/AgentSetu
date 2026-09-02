@@ -39,6 +39,7 @@ class Settings(BaseSettings):
 
     # ── Observability ────────────────────────────────────────────────────────
     sentry_dsn: str = ""
+    log_format: str = "text"  # "text" | "json" — use "json" in production
 
     # ── Scoring weights ───────────────────────────────────────────────────────
     score_weight_price: float = 0.45

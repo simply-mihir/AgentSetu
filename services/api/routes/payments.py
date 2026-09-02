@@ -503,6 +503,19 @@ async def get_receipt(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Phase 20: Full machine-readable commerce receipt.
+
+    Receipt is a self-contained, hash-verifiable JSON document that records
+    every material fact about an agentic commerce transaction:
+    - Who bought, from whom, what, at what price
+    - Policy decision and approval chain
+    - Payment reference and final state
+    - Complete audit trail
+
+    The receipt_hash covers the receipt payload (excluding the hash itself)
+    so any downstream consumer can verify integrity.
+    """
     import hashlib
     txn = session.exec(
         select(Transaction).where(Transaction.transaction_id == transaction_id)
@@ -514,45 +527,123 @@ async def get_receipt(
 
     _assert_payment_txn_access(txn, current_user, session)
 
+    # Load product details for line-item data
+    product = None
+    if txn.product_id and txn.merchant_id:
+        product = session.exec(
+            select(Product).where(
+                Product.product_id == txn.product_id,
+                Product.merchant_id == txn.merchant_id,
+            )
+        ).first()
+
+    # Load merchant for currency and category
+    merchant = None
+    if txn.merchant_id:
+        merchant = session.exec(
+            select(Merchant).where(Merchant.merchant_id == txn.merchant_id)
+        ).first()
+
     from models.audit import AuditEvent
     events = session.exec(
         select(AuditEvent).where(AuditEvent.transaction_id == transaction_id)
         .order_by(AuditEvent.timestamp)
     ).all()
 
+    # ── Build receipt payload ────────────────────────────────────────────────
     receipt_payload = {
-        "receipt_version": "0.2",
+        "receipt_version": "1.0",
+        "schema": "agentsetu-receipt-v1",
+
+        # Identifiers
         "transaction_id": txn.transaction_id,
         "correlation_id": txn.correlation_id,
+        "fingerprint": txn.fingerprint,
+
+        # Parties
+        "buyer": {
+            "buyer_id": txn.buyer_id,
+        },
+        "merchant": {
+            "merchant_id": txn.merchant_id,
+            "name": txn.merchant_name,
+            "category": merchant.category if merchant else None,
+        },
+
+        # Line items
+        "line_items": [
+            {
+                "product_id": txn.product_id,
+                "name": txn.product_name,
+                "category": product.category if product else None,
+                "quantity": 1,
+                "unit_price_inr": txn.amount_inr,
+                "delivery_sla_days": (
+                    [product.delivery_sla_days_min, product.delivery_sla_days_max]
+                    if product else None
+                ),
+                "return_policy": product.return_policy if product else None,
+            }
+        ],
+
+        # Totals
+        "total_amount_inr": txn.amount_inr,
+        "currency": merchant.currency if merchant else "INR",
+
+        # Agent decision chain
+        "intent": {
+            "raw": txn.buyer_intent[:500] if txn.buyer_intent else None,
+            "parsed_constraints": json.loads(txn.parsed_constraints) if txn.parsed_constraints else {},
+        },
+        "policy": {
+            "decision": txn.policy_result,
+            "reason_codes": json.loads(txn.policy_reason_codes) if txn.policy_reason_codes else [],
+        },
+        "approval": {
+            "approval_id": txn.approval_id,
+            "approved_by": txn.approved_by,
+            "approved_at": txn.approved_at.isoformat() if txn.approved_at else None,
+        },
+
+        # Payment
+        "payment": {
+            "provider": "razorpay",
+            "payment_link_id": txn.razorpay_payment_link_id,
+            "payment_link_url": txn.razorpay_payment_link_url,
+            "payment_id": txn.razorpay_payment_id,
+            "order_id": txn.razorpay_order_id,
+        },
+
+        # Final state
         "state": txn.state,
-        "buyer_intent": txn.buyer_intent,
-        "merchant_name": txn.merchant_name,
-        "product_name": txn.product_name,
-        "amount_inr": txn.amount_inr,
-        "currency": "INR",
-        "policy_decision": txn.policy_result,
-        "approval_id": txn.approval_id,
-        "approved_at": txn.approved_at.isoformat() if txn.approved_at else None,
-        "payment_link_id": txn.razorpay_payment_link_id,
+        "failure_reason": txn.failure_reason,
+        "recovery_action": txn.recovery_action,
+
+        # Timestamps
         "created_at": txn.created_at.isoformat(),
+        "updated_at": txn.updated_at.isoformat(),
+
+        # Audit summary
         "audit_event_count": len(events),
     }
 
     receipt_hash = hashlib.sha256(
-        json.dumps(receipt_payload, sort_keys=True).encode()
+        json.dumps(receipt_payload, sort_keys=True, default=str).encode()
     ).hexdigest()
 
     return {
         "receipt": receipt_payload,
         "receipt_hash": receipt_hash,
-        "audit_events": [
+        "audit_trail": [
             {
                 "event_id": e.event_id,
                 "event_type": e.event_type,
                 "actor": e.actor,
                 "timestamp": e.timestamp.isoformat(),
                 "decision": e.decision,
+                "reason_codes": json.loads(e.reason_codes) if e.reason_codes else [],
                 "result": e.result,
+                "next_state": e.next_state,
             }
             for e in events
         ],

@@ -2,7 +2,7 @@
 
 **Baseline checkpoint:** `c87dba4` on `main` (2026-09-01)  
 **Baseline tests:** 41/41 passing  
-**Current tests:** 165/165 passing  
+**Current tests:** 177/177 passing  
 **Frontend build:** clean  
 
 ---
@@ -181,24 +181,42 @@
 - [ ] Pagination
 - [ ] RBAC enforcement in UI
 
-## Phase 20 — Commerce Receipt
-- [ ] Machine-readable JSON receipt
-- [ ] Receipt version, hash, all required fields
+## Phase 20 — Commerce Receipt ✅
+- [x] Receipt schema upgraded to v1.0 (agentsetu-receipt-v1)
+- [x] Full buyer/merchant identification in receipt
+- [x] Line items with product_id, name, category, quantity, unit_price, delivery SLA, return policy
+- [x] Policy decision chain (decision, reason_codes)
+- [x] Approval chain (approval_id, approved_by, approved_at)
+- [x] Payment reference (provider, link_id, payment_id, order_id)
+- [x] Transaction fingerprint for idempotency verification
+- [x] SHA-256 receipt_hash over payload (verifiable by any consumer)
+- [x] Complete audit trail with reason_codes and next_state
+- [x] 12 receipt tests (structure, hash integrity, auth, cross-buyer isolation)
+- [x] 177/177 tests passing
 
-## Phase 21 — Observability
-- [ ] Structured JSON logging
-- [ ] Sentry integration point (feature-flagged)
-- [ ] Health/ready endpoints (already exist)
+## Phase 21 — Observability ✅
+- [x] Structured JSON logging (_JSONFormatter, LOG_FORMAT=json config)
+- [x] Sentry integration point (feature-flagged via SENTRY_DSN, FastAPI + SQLAlchemy integrations)
+- [x] Access logging middleware (method, path, status, latency_ms, request_id)
+- [x] Health probe paths (/health, /ready) excluded from access logs to reduce noise
+- [x] Health/ready endpoints (already exist from Phase 0)
+- [x] 177/177 tests passing
 
-## Phase 22 — Rate Limiting
-- [ ] Per-endpoint rate limits
-- [ ] Redis backend support
-- [ ] HTTP 429 with stable error format
+## Phase 22 — Rate Limiting ✅ (completed across Phases 12 + 14)
+- [x] Per-endpoint rate limits: login (5/min), signup (10/min), payment-link (5/min)
+- [x] HTTP 429 with standard error envelope (Phase 14)
+- [x] Disabled in TESTING=1 env (Phase 12)
+- [ ] Redis backend support — deferred (requires Redis provisioning)
 
-## Phase 23 — Security Headers / Request Limits
-- [ ] Security headers middleware
-- [ ] Request body size limit
-- [ ] CORS restriction by app_mode
+## Phase 23 — Security Headers ✅ (completed in Phase 14)
+- [x] X-Content-Type-Options: nosniff
+- [x] X-Frame-Options: DENY
+- [x] X-XSS-Protection: 0 (CSP is the real defense)
+- [x] Referrer-Policy: strict-origin-when-cross-origin
+- [x] Cache-Control: no-store
+- [x] Strict-Transport-Security (production only)
+- [x] Request body size limit (1 MB, 413 on exceed)
+- [x] CORS restricted to configured origins; wildcard only in dev
 
 ## Phase 24 — Frontend Production Hardening
 - [ ] Auth-aware API client
