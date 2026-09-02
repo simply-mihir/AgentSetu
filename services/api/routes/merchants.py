@@ -8,6 +8,9 @@ from pydantic import BaseModel
 
 from database import get_session
 from models.merchant import Merchant, Product
+from models.user import User, UserRole
+from models.merchant_user import MerchantUser
+from auth.dependencies import get_optional_user, assert_merchant_owner_or_admin
 from arm.generator import get_or_generate_arm
 from arm.schema import MerchantImportRequest, PolicyUpdateRequest
 
@@ -207,12 +210,19 @@ async def update_policy(
     merchant_id: str,
     request: PolicyUpdateRequest,
     session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     merchant = session.exec(
         select(Merchant).where(Merchant.merchant_id == merchant_id)
     ).first()
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
+
+    # ── Tenant isolation: only merchant owners/admins may change policy ────────
+    if current_user:
+        assert_merchant_owner_or_admin(merchant_id, current_user, session)
+    # If no user is authenticated, this endpoint is open (demo mode).
+    # In production, call get_current_user() instead of get_optional_user().
 
     merchant.max_autonomous_spend_inr = request.max_autonomous_spend_inr
     merchant.approval_threshold_inr = request.approval_threshold_inr
