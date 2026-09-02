@@ -29,8 +29,9 @@ class Settings(BaseSettings):
     razorpay_oauth_client_id: str = ""
     razorpay_oauth_client_secret: str = ""
 
-    # ── OpenAI ───────────────────────────────────────────────────────────────
+    # ── LLM (OpenAI-compatible: OpenAI, Groq, Together, etc.) ───────────────
     openai_api_key: str = "sk-demo"
+    openai_base_url: str = ""         # Empty = OpenAI default. Groq: https://api.groq.com/openai/v1
     openai_model: str = "gpt-4o-mini"
 
     # ── Encryption (for stored tokens) ───────────────────────────────────────
