@@ -1,12 +1,22 @@
 """
 Authentication routes — signup, login, me, logout.
-Passwords are hashed with bcrypt via passlib. Tokens are JWTs.
+Passwords are hashed with argon2 via passlib. Tokens are JWTs.
+
+Phase 12 hardening:
+- Login rate limiting (5/minute per IP)
+- Logout / token revocation (JTI blocklist)
+- Password strength validation
 """
 import logging
+import os
+import uuid
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session, select
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from passlib.context import CryptContext
 
 from database import get_session
@@ -17,6 +27,13 @@ from auth.dependencies import get_current_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+# Phase 12: Rate limiter — disabled in test to avoid cross-test exhaustion
+_testing = os.environ.get("TESTING", "").lower() in ("1", "true")
+limiter = Limiter(key_func=get_remote_address, enabled=not _testing)
+
+# Phase 12: In-memory token revocation set (production would use Redis)
+# Stores JTIs (JWT IDs) of revoked tokens until they naturally expire
+_revoked_jtis: set[str] = set()
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
@@ -41,11 +58,37 @@ class TokenResponse(BaseModel):
     display_name: str
 
 
+def _validate_password(password: str) -> list[str]:
+    """Phase 12: Basic password strength checks."""
+    issues = []
+    if len(password) < 8:
+        issues.append("Password must be at least 8 characters")
+    if not any(c.isupper() for c in password):
+        issues.append("Password must contain at least one uppercase letter")
+    if not any(c.isdigit() for c in password):
+        issues.append("Password must contain at least one digit")
+    return issues
+
+
+def is_token_revoked(jti: str) -> bool:
+    """Check if a JWT ID has been revoked."""
+    return jti in _revoked_jtis
+
+
 @router.post("/signup", response_model=TokenResponse, summary="Create a new account")
-async def signup(request: SignupRequest, session: Session = Depends(get_session)):
+@limiter.limit("10/minute")
+async def signup(request: Request, body: SignupRequest, session: Session = Depends(get_session)):
+    # Phase 12: Password validation
+    pw_issues = _validate_password(body.password)
+    if pw_issues:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "WEAK_PASSWORD", "message": "; ".join(pw_issues)}},
+        )
+
     # Validate role
     allowed_roles = {r.value for r in UserRole} - {"PLATFORM_ADMIN"}
-    role = request.role.upper()
+    role = body.role.upper()
     if role not in allowed_roles:
         raise HTTPException(
             status_code=400,
@@ -53,7 +96,7 @@ async def signup(request: SignupRequest, session: Session = Depends(get_session)
         )
 
     # Check duplicate email
-    existing = session.exec(select(User).where(User.email == request.email.lower())).first()
+    existing = session.exec(select(User).where(User.email == body.email.lower())).first()
     if existing:
         raise HTTPException(
             status_code=409,
@@ -61,9 +104,9 @@ async def signup(request: SignupRequest, session: Session = Depends(get_session)
         )
 
     user = User(
-        email=request.email.lower(),
-        display_name=request.display_name or request.email.split("@")[0],
-        hashed_password=pwd_context.hash(request.password),
+        email=body.email.lower(),
+        display_name=body.display_name or body.email.split("@")[0],
+        hashed_password=pwd_context.hash(body.password),
         role=UserRole(role),
         status=UserStatus.ACTIVE,
     )
@@ -77,7 +120,8 @@ async def signup(request: SignupRequest, session: Session = Depends(get_session)
         session.add(profile)
         session.commit()
 
-    token = create_access_token(subject=user.user_id, role=user.role)
+    jti = uuid.uuid4().hex
+    token = create_access_token(subject=user.user_id, role=user.role, extra={"jti": jti})
     logger.info(f"New user signed up: {user.user_id} ({user.role})")
     return TokenResponse(
         access_token=token,
@@ -88,10 +132,11 @@ async def signup(request: SignupRequest, session: Session = Depends(get_session)
 
 
 @router.post("/login", response_model=TokenResponse, summary="Login and get access token")
-async def login(request: LoginRequest, session: Session = Depends(get_session)):
-    user = session.exec(select(User).where(User.email == request.email.lower())).first()
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest, session: Session = Depends(get_session)):
+    user = session.exec(select(User).where(User.email == body.email.lower())).first()
 
-    if not user or not pwd_context.verify(request.password, user.hashed_password):
+    if not user or not pwd_context.verify(body.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": {"code": "INVALID_CREDENTIALS", "message": "Invalid email or password."}},
@@ -103,7 +148,8 @@ async def login(request: LoginRequest, session: Session = Depends(get_session)):
             detail={"error": {"code": "ACCOUNT_SUSPENDED", "message": "Account is suspended."}},
         )
 
-    token = create_access_token(subject=user.user_id, role=user.role)
+    jti = uuid.uuid4().hex
+    token = create_access_token(subject=user.user_id, role=user.role, extra={"jti": jti})
     logger.info(f"User logged in: {user.user_id}")
     return TokenResponse(
         access_token=token,
@@ -111,6 +157,20 @@ async def login(request: LoginRequest, session: Session = Depends(get_session)):
         role=user.role,
         display_name=user.display_name,
     )
+
+
+@router.post("/logout", summary="Revoke current access token")
+async def logout(
+    user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
+    """Phase 12: Logout by revoking the current token's JTI."""
+    from auth.jwt import decode_access_token
+    payload = decode_access_token(credentials.credentials)
+    if payload and payload.get("jti"):
+        _revoked_jtis.add(payload["jti"])
+        logger.info(f"Token revoked for user {user.user_id} (jti={payload['jti']})")
+    return {"success": True, "message": "Token revoked."}
 
 
 @router.get("/me", summary="Get current authenticated user")

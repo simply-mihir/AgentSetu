@@ -17,8 +17,8 @@ class AuditEvent(SQLModel, table=True):
     correlation_id: str = Field(index=True)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-    actor: str  # agentsetu | buyer | merchant | razorpay
-    event_type: str  # intent.received | catalog.discovered | policy.decision | etc.
+    actor: str = Field(index=True)  # agentsetu | buyer | merchant | razorpay
+    event_type: str = Field(index=True)  # intent.received | catalog.discovered | etc.
 
     input_summary: str = "{}"   # JSON
     decision: Optional[str] = None  # ALLOW | DENY | NEEDS_APPROVAL | SUCCESS | FAILED

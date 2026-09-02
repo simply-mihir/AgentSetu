@@ -23,7 +23,9 @@ logging.basicConfig(
 logger = logging.getLogger("agentsetu")
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
-limiter = Limiter(key_func=get_remote_address)
+import os as _os
+_testing = _os.environ.get("TESTING", "").lower() in ("1", "true")
+limiter = Limiter(key_func=get_remote_address, enabled=not _testing)
 
 
 @asynccontextmanager

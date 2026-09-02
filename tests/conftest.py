@@ -13,6 +13,7 @@ os.environ["RAZORPAY_WEBHOOK_SECRET"] = "test_webhook_secret"
 os.environ["RAZORPAY_KEY_ID"] = "rzp_test_demo"
 os.environ["RAZORPAY_KEY_SECRET"] = "demo_secret"
 os.environ["OPENAI_API_KEY"] = "sk-demo"
+os.environ["TESTING"] = "1"  # Phase 12: Disable rate limiting in tests
 
 import pytest
 from fastapi.testclient import TestClient

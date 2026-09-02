@@ -28,6 +28,12 @@ def _get_optional_user(
     payload = decode_access_token(credentials.credentials)
     if not payload:
         return None
+    # Phase 12: Check JTI revocation
+    jti = payload.get("jti")
+    if jti:
+        from routes.auth import is_token_revoked
+        if is_token_revoked(jti):
+            return None
     user_id = payload.get("sub")
     if not user_id:
         return None
