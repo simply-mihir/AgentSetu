@@ -2,7 +2,7 @@
 
 **Baseline checkpoint:** `c87dba4` on `main` (2026-09-01)  
 **Baseline tests:** 41/41 passing  
-**Current tests:** 148/148 passing  
+**Current tests:** 165/165 passing  
 **Frontend build:** clean  
 
 ---
@@ -139,11 +139,17 @@
 - [x] 19 adversarial tests (key stripping, type coercion, injection patterns, role escalation, payment override)
 - [x] 148/148 tests passing
 
-## Phase 14 — Public API v1
-- [ ] Cleaned v1 endpoint set
-- [ ] OpenAPI docs
-- [ ] Consistent error format
-- [ ] Rate limits on all endpoints
+## Phase 14 — Public API v1 ✅
+- [x] Consistent error envelope: all HTTP errors wrapped in `{error: {code, message, request_id, details}}`
+- [x] Global exception handlers: HTTPException, RequestValidationError, RateLimitExceeded
+- [x] Security headers: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Cache-Control, HSTS (prod)
+- [x] Request body size limit (1 MB, 413 on exceed)
+- [x] OpenAPI tag descriptions for all route groups
+- [x] OpenAPI description with core invariants documented
+- [x] X-Request-ID on every response (generated or echoed from client)
+- [x] Rate limits: login (5/min), signup (10/min), payment-link (5/min)
+- [x] 17 API hardening tests (error envelope, security headers, OpenAPI, request limits, health)
+- [x] 165/165 tests passing
 
 ## Phase 15 — MCP Adapter
 - [ ] MCP tool definitions
