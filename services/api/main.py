@@ -162,6 +162,7 @@ _openapi_tags = [
     {"name": "Audit", "description": "Audit trail — every material agent and money action is recorded"},
     {"name": "Webhooks", "description": "Payment provider webhook handlers (Razorpay)"},
     {"name": "Health", "description": "Liveness and readiness probes"},
+    {"name": "MCP", "description": "Model Context Protocol — tool definitions for AI agent integration"},
 ]
 
 app = FastAPI(
