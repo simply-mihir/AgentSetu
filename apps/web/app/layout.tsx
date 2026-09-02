@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
+import { AuthProvider } from '@/lib/auth'
 
 export const metadata: Metadata = {
   title: 'AgentSetu — Agentic Commerce Infrastructure',
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <AuthProvider>
         {children}
+        </AuthProvider>
         <Toaster
           position="bottom-right"
           toastOptions={{

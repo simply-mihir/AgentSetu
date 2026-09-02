@@ -1,4 +1,11 @@
-"""Merchant onboarding, ARM generation, and policy management routes."""
+"""
+Merchant onboarding, ARM generation, and policy management routes.
+
+SECURITY:
+- POST /import requires authentication (MERCHANT_OWNER/ADMIN/PLATFORM_ADMIN)
+- PUT /{merchant_id}/policy requires authentication with merchant access
+- GET / and GET /{merchant_id} are public catalog endpoints
+"""
 import json
 from datetime import datetime
 from typing import List, Optional
@@ -10,7 +17,10 @@ from database import get_session
 from models.merchant import Merchant, Product
 from models.user import User, UserRole
 from models.merchant_user import MerchantUser
-from auth.dependencies import get_optional_user, assert_merchant_owner_or_admin
+from auth.dependencies import (
+    get_current_user, get_optional_user,
+    assert_merchant_owner_or_admin, require_role,
+)
 from arm.generator import get_or_generate_arm
 from arm.schema import MerchantImportRequest, PolicyUpdateRequest
 
@@ -29,7 +39,6 @@ class ProductOut(BaseModel):
     return_policy: str
     merchant_rating: float
     description: str
-    payment_link_id: Optional[str]
 
 
 class MerchantOut(BaseModel):
@@ -50,8 +59,27 @@ class MerchantOut(BaseModel):
 async def import_merchant(
     request: MerchantImportRequest,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Import or update a merchant catalog. Generates ARM automatically."""
+    """
+    Import or update a merchant catalog. Generates ARM automatically.
+    C3 FIX: Requires authentication. Only MERCHANT_OWNER, MERCHANT_ADMIN,
+    or PLATFORM_ADMIN can import catalogs.
+    """
+    # Verify the user has permission to manage this merchant
+    allowed_roles = {UserRole.MERCHANT_OWNER, UserRole.MERCHANT_ADMIN, UserRole.PLATFORM_ADMIN}
+    if current_user.role not in allowed_roles:
+        raise HTTPException(status_code=403, detail="Only merchant owners/admins can import catalogs")
+
+    # For non-PLATFORM_ADMIN, verify merchant access
+    if current_user.role != UserRole.PLATFORM_ADMIN:
+        # Check if merchant exists and user has access
+        existing_merchant = session.exec(
+            select(Merchant).where(Merchant.merchant_id == request.merchant_id)
+        ).first()
+        if existing_merchant:
+            assert_merchant_owner_or_admin(request.merchant_id, current_user, session)
+        # If merchant doesn't exist yet, creating a new one is allowed for MERCHANT_OWNER
 
     # Upsert merchant
     merchant = session.exec(
@@ -74,11 +102,28 @@ async def import_merchant(
     session.commit()
     session.refresh(merchant)
 
+    # If this is a new merchant and the user is MERCHANT_OWNER, create membership
+    if current_user.role in {UserRole.MERCHANT_OWNER, UserRole.MERCHANT_ADMIN}:
+        existing_membership = session.exec(
+            select(MerchantUser).where(
+                MerchantUser.merchant_id == request.merchant_id,
+                MerchantUser.user_id == current_user.user_id,
+            )
+        ).first()
+        if not existing_membership:
+            from models.merchant_user import MerchantUserRole
+            membership = MerchantUser(
+                merchant_id=request.merchant_id,
+                user_id=current_user.user_id,
+                role=MerchantUserRole.OWNER if current_user.role == UserRole.MERCHANT_OWNER else MerchantUserRole.ADMIN,
+            )
+            session.add(membership)
+            session.commit()
+
     # Import products
     imported, errors = [], []
     for p_data in request.products:
         try:
-            # Validate required fields
             required = ["product_id", "name", "price_inr", "category"]
             missing = [f for f in required if f not in p_data]
             if missing:
@@ -134,6 +179,7 @@ async def import_merchant(
 
 @router.get("/", summary="List all merchants")
 async def list_merchants(session: Session = Depends(get_session)):
+    """Public catalog endpoint — lists active merchants."""
     merchants = session.exec(select(Merchant)).all()
     result = []
     for m in merchants:
@@ -146,10 +192,6 @@ async def list_merchants(session: Session = Depends(get_session)):
             "currency": m.currency,
             "description": m.description,
             "category": m.category,
-            "max_autonomous_spend_inr": m.max_autonomous_spend_inr,
-            "approval_threshold_inr": m.approval_threshold_inr,
-            "restricted_categories": m.get_restricted_categories(),
-            "refund_authority": m.refund_authority,
             "is_active": m.is_active,
             "product_count": len(products),
         })
@@ -210,19 +252,20 @@ async def update_policy(
     merchant_id: str,
     request: PolicyUpdateRequest,
     session: Session = Depends(get_session),
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
 ):
+    """
+    H2 FIX: Changed from get_optional_user to get_current_user.
+    Authentication is ALWAYS required for policy mutation.
+    """
     merchant = session.exec(
         select(Merchant).where(Merchant.merchant_id == merchant_id)
     ).first()
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
 
-    # ── Tenant isolation: only merchant owners/admins may change policy ────────
-    if current_user:
-        assert_merchant_owner_or_admin(merchant_id, current_user, session)
-    # If no user is authenticated, this endpoint is open (demo mode).
-    # In production, call get_current_user() instead of get_optional_user().
+    # Tenant isolation: only merchant owners/admins may change policy
+    assert_merchant_owner_or_admin(merchant_id, current_user, session)
 
     merchant.max_autonomous_spend_inr = request.max_autonomous_spend_inr
     merchant.approval_threshold_inr = request.approval_threshold_inr

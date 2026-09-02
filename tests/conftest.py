@@ -106,3 +106,30 @@ def demo_buyer(client):
     assert resp.status_code == 200, resp.text
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}", "user_id": resp.json()["user_id"]}
+
+
+@pytest.fixture
+def buyer_headers(client):
+    """Convenience: just the auth headers dict for a buyer."""
+    resp = client.post("/v1/auth/signup", json={
+        "email": "integ_buyer@test.com",
+        "password": "TestPass123!",
+        "role": "BUYER",
+    })
+    assert resp.status_code == 200, resp.text
+    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+
+@pytest.fixture
+def merchant_owner_headers(client, session):
+    """Register a merchant owner and return auth headers + user_id."""
+    resp = client.post("/v1/auth/signup", json={
+        "email": "owner@test.com",
+        "password": "TestPass123!",
+        "role": "MERCHANT_OWNER",
+    })
+    assert resp.status_code == 200, resp.text
+    return {
+        "Authorization": f"Bearer {resp.json()['access_token']}",
+        "user_id": resp.json()["user_id"],
+    }
