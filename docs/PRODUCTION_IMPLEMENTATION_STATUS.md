@@ -2,7 +2,7 @@
 
 **Baseline checkpoint:** `c87dba4` on `main` (2026-09-01)  
 **Baseline tests:** 41/41 passing  
-**Current tests:** 77/77 passing  
+**Current tests:** 102/102 passing  
 **Frontend build:** clean  
 
 ---
@@ -47,16 +47,21 @@
 - [x] 18 buyer policy unit tests (blocked, daily limit, priority, backward compat)
 - [x] 77/77 tests passing
 
-## Phase 4 — Capability Hardening
-- [ ] Bind buyer_id to authenticated buyer
-- [ ] Row-level locking (PostgreSQL) for consume
-- [ ] Idempotent revocation
-- [ ] Extended capability tests
+## Phase 4 — Capability Hardening ✅
+- [x] buyer_id binding validation in consume_capability (CAPABILITY_BUYER_MISMATCH)
+- [x] SELECT ... FOR UPDATE row-level locking (PostgreSQL; safe no-op on SQLite)
+- [x] buyer_id passed from payment route to consume_capability
+- [x] consume_capability now uses flush() instead of commit() (caller controls txn)
+- [x] 6 new capability hardening tests (buyer binding, atomicity, expiry)
+- [x] 102/102 tests passing
 
-## Phase 5 — Transaction State Machine
-- [ ] Explicit transition validation
-- [ ] Resolve /select state ambiguity
-- [ ] Audit on every transition
+## Phase 5 — Transaction State Machine ✅
+- [x] ALLOWED_TRANSITIONS map — explicit set of legal (from → to) pairs
+- [x] validate_transition() function
+- [x] /select enforces DRAFT → PENDING_APPROVAL only
+- [x] Terminal states: RECEIPT_ISSUED, CANCELLED, RECOVERY_PROPOSED
+- [x] 12 state machine unit tests (allowed, disallowed, completeness)
+- [x] 102/102 tests passing
 
 ## Phase 6 — Idempotency
 - [ ] Full 64-char SHA-256 fingerprint

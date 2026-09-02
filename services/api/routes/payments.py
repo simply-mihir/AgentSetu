@@ -19,7 +19,7 @@ from slowapi.util import get_remote_address
 
 from database import get_session
 from models.merchant import Merchant, Product
-from models.transaction import Transaction, TransactionState
+from models.transaction import Transaction, TransactionState, validate_transition
 from models.user import User, UserRole, BuyerProfile
 from models.merchant_user import MerchantUser
 from policy.engine import PolicyEngine, PolicyDecision, BuyerPolicyContext
@@ -292,6 +292,7 @@ async def create_payment_link(
         transaction_id=txn.transaction_id,
         merchant_id=txn.merchant_id,
         amount_inr=txn.amount_inr,
+        buyer_id=current_user.user_id,
     )
     if not ok:
         raise HTTPException(status_code=400, detail=make_error(
