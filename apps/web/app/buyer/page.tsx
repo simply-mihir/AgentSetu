@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Loader2, ShoppingBag, ArrowRight, ChevronRight } from 'lucide-react'
+import { Send, Loader2, ShoppingBag, ArrowRight, ChevronRight, History } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { transactionsApi, paymentsApi, extractErrorMessage, type Product, type IntentResponse } from '@/lib/api'
@@ -220,11 +220,16 @@ export default function BuyerPage() {
             <h1 className="text-xl font-bold text-white">AI Buyer</h1>
             <p className="text-text-muted text-sm">State your intent in natural language</p>
           </div>
-          {(step !== 'idle' || messages.length > 0) && (
-            <button onClick={handleReset} className="btn-ghost text-sm py-2 px-4">
-              New Purchase
-            </button>
-          )}
+          <div className="flex gap-2">
+            <Link href="/buyer/orders" className="btn-ghost text-sm py-2 px-4">
+              <History size={14} /> Orders
+            </Link>
+            {(step !== 'idle' || messages.length > 0) && (
+              <button onClick={handleReset} className="btn-ghost text-sm py-2 px-4">
+                New Purchase
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Messages */}

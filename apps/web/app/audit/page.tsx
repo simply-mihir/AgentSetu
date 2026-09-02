@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FileText, RefreshCw, Search, ChevronDown, ChevronRight } from 'lucide-react'
+import { FileText, RefreshCw, Search, ChevronDown, ChevronRight, Filter } from 'lucide-react'
 import { format } from 'date-fns'
 import Nav from '@/components/ui/Nav'
 import { auditApi, transactionsApi, extractErrorMessage, type Transaction } from '@/lib/api'
@@ -46,6 +46,7 @@ function AuditContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [stateFilter, setStateFilter] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
   const loadData = async () => {
@@ -89,12 +90,21 @@ function AuditContent() {
     }
   }
 
-  const filteredTxns = transactions.filter(t =>
-    !search ||
-    t.transaction_id.includes(search) ||
-    (t.buyer_intent || '').toLowerCase().includes(search.toLowerCase()) ||
-    (t.merchant_name || '').toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredTxns = transactions.filter(t => {
+    // State filter
+    if (stateFilter && t.state !== stateFilter) return false
+    // Text search
+    if (search) {
+      const q = search.toLowerCase()
+      return t.transaction_id.includes(search) ||
+        (t.buyer_intent || '').toLowerCase().includes(q) ||
+        (t.merchant_name || '').toLowerCase().includes(q)
+    }
+    return true
+  })
+
+  // Unique states for filter chips
+  const statesPresent = [...new Set(transactions.map(t => t.state))]
 
   return (
     <div className="max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
@@ -139,6 +149,35 @@ function AuditContent() {
           className="glass-input pl-9 text-sm"
         />
       </div>
+
+      {/* State filters */}
+      {statesPresent.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter size={12} className="text-text-muted" />
+          <button
+            onClick={() => setStateFilter(null)}
+            className={`text-xs px-2.5 py-1 rounded-lg transition-all ${
+              !stateFilter ? 'bg-primary/20 text-primary border border-primary/30' : 'text-text-muted hover:text-white hover:bg-white/05'
+            }`}
+          >
+            All
+          </button>
+          {statesPresent.map(state => (
+            <button
+              key={state}
+              onClick={() => setStateFilter(stateFilter === state ? null : state)}
+              className={`text-xs px-2.5 py-1 rounded-lg transition-all ${
+                stateFilter === state ? 'bg-primary/20 text-primary border border-primary/30' : 'text-text-muted hover:text-white hover:bg-white/05'
+              }`}
+            >
+              {state.replace(/_/g, ' ')}
+              <span className="ml-1 opacity-60">
+                {transactions.filter(t => t.state === state).length}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Transaction list */}
       <div className="space-y-2">

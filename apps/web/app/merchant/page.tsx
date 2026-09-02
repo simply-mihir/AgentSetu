@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Store, Package, Shield, Code, RefreshCw } from 'lucide-react'
+import { Store, Package, Shield, Code, RefreshCw, ShoppingBag, CreditCard } from 'lucide-react'
 import Link from 'next/link'
 import Nav from '@/components/ui/Nav'
 import { merchantsApi, extractErrorMessage, type Merchant } from '@/lib/api'
@@ -41,12 +41,23 @@ export default function MerchantPage() {
           </div>
         </div>
 
+        {/* Razorpay status */}
+        <div className="glass-card p-4 flex items-center gap-3">
+          <CreditCard size={18} className="text-agent" />
+          <div className="flex-1">
+            <span className="text-sm text-white">Razorpay Integration</span>
+            <span className="text-text-muted text-xs ml-2">Server-side only — keys never exposed to browser</span>
+          </div>
+          <span className="chip-trust text-[10px]">Connected</span>
+        </div>
+
         {/* Quick actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { icon: Package, label: 'Import Catalog', desc: 'Upload JSON or CSV product catalog', href: '/merchant/import', color: 'var(--primary)' },
-            { icon: Shield, label: 'Policy Controls', desc: 'Configure spend caps and approval thresholds', href: '/merchant/policy', color: 'var(--trust)' },
-            { icon: Code, label: 'ARM Preview', desc: 'View machine-readable merchant manifests', href: '#arm', color: 'var(--agent)' },
+            { icon: Package, label: 'Import Catalog', desc: 'Upload product catalog', href: '/merchant/import', color: 'var(--primary)' },
+            { icon: Shield, label: 'Policy Controls', desc: 'Spend caps & thresholds', href: '/merchant/policy', color: 'var(--trust)' },
+            { icon: ShoppingBag, label: 'Orders', desc: 'View incoming orders', href: '/merchant/orders', color: 'var(--warning)' },
+            { icon: Code, label: 'ARM Preview', desc: 'Machine-readable manifests', href: '#arm', color: 'var(--agent)' },
           ].map(item => (
             <Link key={item.label} href={item.href} className="glass-card p-5 hover:scale-[1.02] transition-all">
               <item.icon size={20} style={{ color: item.color }} className="mb-3" />
