@@ -35,14 +35,20 @@ class Transaction(SQLModel, table=True):
     )
 
     # Buyer identity — set from auth context, never from client
-    buyer_id: Optional[str] = Field(default=None, index=True)
+    buyer_id: Optional[str] = Field(
+        default=None, index=True,
+        foreign_key="users.user_id",
+    )
 
     # Buyer intent
     buyer_intent: str = ""
     parsed_constraints: str = "{}"  # JSON
 
     # Merchant/product selection
-    merchant_id: Optional[str] = None
+    merchant_id: Optional[str] = Field(
+        default=None, index=True,
+        foreign_key="merchants.merchant_id",
+    )
     merchant_name: Optional[str] = None
     product_id: Optional[str] = None
     product_name: Optional[str] = None
