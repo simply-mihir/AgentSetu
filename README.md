@@ -134,30 +134,41 @@ agentsetu/
 
 ## API Reference
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/v1/merchants/import` | Import catalog + generate ARM |
-| GET | `/v1/merchants/` | List all merchants |
-| GET | `/v1/merchants/{id}/arm` | Get ARM manifest |
-| PUT | `/v1/merchants/{id}/policy` | Update agent spend policy |
-| GET | `/v1/discover/` | Search by category/price/delivery |
-| POST | `/v1/transactions/intent` | Process buyer intent (full pipeline) |
-| POST | `/v1/transactions/policy/evaluate` | Deterministic policy check |
-| POST | `/v1/transactions/approve` | Record buyer consent |
-| POST | `/v1/payments/payment-link` | Create Razorpay Payment Link |
-| POST | `/v1/payments/verify/{id}` | Verify payment status |
-| GET | `/v1/payments/receipt/{id}` | Machine-readable receipt |
-| GET | `/v1/audit/` | List recent audit events |
-| GET | `/v1/audit/{correlation_id}` | Full transaction timeline |
-| POST | `/v1/webhooks/razorpay` | Razorpay webhook handler |
+| Method | Endpoint | Auth | Purpose |
+|--------|----------|------|---------|
+| POST | `/v1/auth/signup` | — | Create account |
+| POST | `/v1/auth/login` | — | Login, get JWT |
+| POST | `/v1/auth/logout` | ✅ | Revoke current token |
+| GET | `/v1/auth/me` | ✅ | Current user info |
+| POST | `/v1/merchants/import` | ✅ | Import catalog + generate ARM |
+| GET | `/v1/merchants/` | — | List merchants (public) |
+| GET | `/v1/merchants/{id}` | — | Merchant detail (public) |
+| GET | `/v1/merchants/{id}/arm` | — | Get ARM manifest |
+| PUT | `/v1/merchants/{id}/policy` | ✅ | Update agent spend policy |
+| GET | `/v1/discover/` | — | Search by category/price/delivery |
+| POST | `/v1/transactions/intent` | opt | Process buyer intent (full pipeline) |
+| POST | `/v1/transactions/select` | opt | Select product from candidates |
+| POST | `/v1/transactions/approve` | ✅ | Record buyer consent |
+| GET | `/v1/transactions/{id}` | ✅ | Transaction detail |
+| GET | `/v1/transactions/` | ✅ | List transactions (tenant-scoped) |
+| POST | `/v1/payments/payment-link` | ✅ | Create Razorpay Payment Link |
+| POST | `/v1/payments/verify/{id}` | ✅ | Verify payment status |
+| GET | `/v1/payments/receipt/{id}` | ✅ | Machine-readable receipt (v1.0) |
+| POST | `/v1/payments/cancel/{id}` | ✅ | Cancel unpaid payment link |
+| GET | `/v1/audit/` | ✅ | List audit events (tenant-scoped) |
+| GET | `/v1/audit/{correlation_id}` | ✅ | Full transaction timeline |
+| POST | `/v1/webhooks/razorpay` | HMAC | Razorpay webhook handler |
 
 ---
 
-## ARM Schema
+## ARM Schema (v0.2)
 
 ```json
 {
-  "schema_version": "arm-0.1",
+  "schema_version": "arm-0.2",
+  "manifest_id": "arm_a1b2c3d4e5f6",
+  "generated_at": "2026-09-01T12:00:00Z",
+  "manifest_hash": "sha256:...",
   "merchant": { "id": "organickart-01", "name": "OrganicKart", "currency": "INR" },
   "products": [{
     "product_id": "ok-honey-500",
@@ -172,10 +183,11 @@ agentsetu/
     "approval_required_above_inr": 500,
     "restricted_categories": [],
     "refund_authority": "human_only"
-  },
-  "payment": { "provider": "razorpay", "type": "payment_link" }
+  }
 }
 ```
+
+Note: No payment credentials in the manifest. Payment is handled server-side only.
 
 ---
 
@@ -204,10 +216,23 @@ All scoring is deterministic and exposed to the buyer. The LLM generates the exp
 
 | Layer | Choice |
 |-------|--------|
-| Backend | FastAPI + Python 3.11+ |
+| Backend | FastAPI + Python 3.12 |
 | AI | OpenAI structured outputs (gpt-4o-mini) |
-| Database | SQLite + SQLModel |
-| Payments | Razorpay Test Mode Payment Links |
+| Database | SQLite (dev) / PostgreSQL (prod) + SQLModel + Alembic |
+| Auth | JWT (HS256) + argon2 passwords + JTI revocation |
+| Payments | Razorpay Payment Links (test/live) |
 | Frontend | Next.js 14 + TypeScript + Tailwind |
 | Animation | Framer Motion |
-| Deploy | Vercel (frontend) + Railway (backend) |
+| Deploy | Docker + docker-compose (PostgreSQL + Redis + API) |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, transaction flow, state machine, data models |
+| [SECURITY.md](docs/SECURITY.md) | Threat model, mitigations, auth, payment safety |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Setup, testing, conventions, environment variables |
+| [MANUAL_SETUP_CHECKLIST.md](docs/MANUAL_SETUP_CHECKLIST.md) | External dependencies checklist for production |
+| [PRODUCTION_IMPLEMENTATION_STATUS.md](docs/PRODUCTION_IMPLEMENTATION_STATUS.md) | Phase-by-phase implementation status |
