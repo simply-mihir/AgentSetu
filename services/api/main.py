@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
@@ -67,7 +67,8 @@ if settings.sentry_dsn:
         logger.warning("sentry_dsn set but sentry-sdk not installed — skipping")
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
-import os as _os
+import os as _os  # noqa: E402
+
 _testing = _os.environ.get("TESTING", "").lower() in ("1", "true")
 limiter = Limiter(key_func=get_remote_address, enabled=not _testing)
 
@@ -187,8 +188,8 @@ app.state.limiter = limiter
 
 
 # ── Phase 14: Consistent error responses ─────────────────────────────────────
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import RequestValidationError  # noqa: E402
+from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
 
 
 async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
@@ -241,7 +242,7 @@ async def _validation_exception_handler(request: Request, exc: RequestValidation
     request_id = request.headers.get("X-Request-ID", f"req_{uuid.uuid4().hex[:8]}")
     errors = exc.errors()
     message = "; ".join(
-        f"{'.'.join(str(l) for l in e.get('loc', []))}: {e.get('msg', 'invalid')}"
+        f"{'.'.join(str(loc) for loc in e.get('loc', []))}: {e.get('msg', 'invalid')}"
         for e in errors
     )
     return JSONResponse(
@@ -276,7 +277,7 @@ app.add_middleware(
 
 
 # ── Request ID + Security Headers + Logging middleware ────────────────────────
-import time as _time
+import time as _time  # noqa: E402
 
 _access_logger = logging.getLogger("agentsetu.access")
 

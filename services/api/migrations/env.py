@@ -1,11 +1,12 @@
 """Alembic environment — reads DATABASE_URL from application config."""
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import pool
 from alembic import context
 from sqlmodel import SQLModel
 
 # Import all models so metadata is populated
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import models  # noqa: F401 — registers all table metadata
 

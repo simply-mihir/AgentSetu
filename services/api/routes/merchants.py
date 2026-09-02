@@ -18,8 +18,7 @@ from models.merchant import Merchant, Product
 from models.user import User, UserRole
 from models.merchant_user import MerchantUser
 from auth.dependencies import (
-    get_current_user, get_optional_user,
-    assert_merchant_owner_or_admin, require_role,
+    get_current_user, assert_merchant_owner_or_admin,
 )
 from arm.generator import get_or_generate_arm
 from arm.schema import MerchantImportRequest, PolicyUpdateRequest
@@ -193,7 +192,7 @@ async def list_merchants(
 
     query = select(Merchant)
     if active_only:
-        query = query.where(Merchant.is_active == True)
+        query = query.where(Merchant.is_active.is_(True))
     if category:
         query = query.where(Merchant.category == category)
     query = query.offset(offset).limit(limit)

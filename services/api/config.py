@@ -2,7 +2,6 @@
 Application configuration — loaded from environment variables.
 Never hard-code secrets. Use .env for local dev, managed secrets in production.
 """
-import secrets
 from pydantic_settings import BaseSettings
 from typing import List
 

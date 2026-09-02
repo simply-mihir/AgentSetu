@@ -4,7 +4,6 @@ Every material agent and money action must be recorded here.
 """
 import json
 import logging
-from datetime import datetime
 from typing import List, Optional
 from sqlmodel import Session, select
 from models.audit import AuditEvent

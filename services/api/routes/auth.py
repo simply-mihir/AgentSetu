@@ -10,10 +10,9 @@ Phase 12 hardening:
 import logging
 import os
 import uuid
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from sqlmodel import Session, select
 from slowapi import Limiter
 from slowapi.util import get_remote_address

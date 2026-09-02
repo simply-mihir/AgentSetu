@@ -2,7 +2,6 @@
 Consistent error response structure.
 Every API error returns: {"error": {"code": "...", "message": "...", "request_id": "...", "details": {}}}
 """
-from fastapi import Request
 from fastapi.responses import JSONResponse
 import uuid
 

@@ -10,8 +10,7 @@ Phase 13 hardening:
 """
 import json
 import logging
-import re
-from typing import List, Optional
+from typing import List
 from openai import OpenAI
 from config import settings
 
@@ -253,9 +252,6 @@ Suggest a safe recovery action in 2-3 sentences.
         if not candidates:
             return []
 
-        max_budget = constraints.get("max_budget_inr") or 99999
-        max_delivery = constraints.get("delivery_sla_days") or 7
-
         # Price scores (cheaper is better relative to budget)
         prices = [c["price_inr"] for c in candidates]
         max_price = max(prices) or 1
@@ -264,10 +260,6 @@ Suggest a safe recovery action in 2-3 sentences.
         # Delivery scores
         deliveries = [c.get("delivery_sla_days_max", 7) for c in candidates]
         max_del = max(deliveries) or 7
-
-        # Rating scores
-        ratings = [c.get("merchant_rating", 3.0) for c in candidates]
-        max_rating = max(ratings) or 5.0
 
         for c in candidates:
             price = c["price_inr"]

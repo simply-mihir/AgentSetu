@@ -14,7 +14,6 @@ All money-movement decisions go through here — no exceptions.
 8. Effective spend limit (min of merchant + buyer per-txn)
 9. Approval threshold
 """
-import json
 from enum import Enum
 from typing import List, Optional
 from dataclasses import dataclass, field
