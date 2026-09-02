@@ -8,6 +8,9 @@ const api = axios.create({
   timeout: 30000,
 })
 
+// ── Phase 24: Re-export error utilities for pages ──────────────────────────
+export { extractErrorMessage, extractApiError, isApiErrorCode } from './errors'
+
 // Types
 export interface Merchant {
   merchant_id: string
