@@ -5,18 +5,24 @@ import { motion } from 'framer-motion'
 import { Store, Package, Shield, Code, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import Nav from '@/components/ui/Nav'
-import { merchantsApi, type Merchant } from '@/lib/api'
+import { merchantsApi, extractErrorMessage, type Merchant } from '@/lib/api'
+import { LoadingState, EmptyState, ErrorState } from '@/components/ui/StateViews'
 
 export default function MerchantPage() {
   const [merchants, setMerchants] = useState<Merchant[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const loadMerchants = () => {
+    setLoading(true)
+    setError(null)
     merchantsApi.list()
       .then(setMerchants)
-      .catch(console.error)
+      .catch(err => setError(extractErrorMessage(err, 'Failed to load merchants.')))
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { loadMerchants() }, [])
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -55,11 +61,15 @@ export default function MerchantPage() {
           <h2 className="font-semibold text-white mb-4">Active Merchants ({merchants.length})</h2>
 
           {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="glass-card p-5 shimmer h-24" />
-              ))}
-            </div>
+            <LoadingState message="Loading merchants…" rows={3} />
+          ) : error ? (
+            <ErrorState message={error} onRetry={loadMerchants} />
+          ) : merchants.length === 0 ? (
+            <EmptyState
+              icon={<Store size={32} />}
+              message="No merchants yet. Import a product catalog to get started."
+              action={{ label: 'Import Catalog', href: '/merchant/import' }}
+            />
           ) : (
             <div className="space-y-3">
               {merchants.map((merchant, i) => (
@@ -84,15 +94,19 @@ function MerchantRow({ merchant }: { merchant: Merchant }) {
   const [showArm, setShowArm] = useState(false)
   const [arm, setArm] = useState<any>(null)
   const [loadingArm, setLoadingArm] = useState(false)
+  const [armError, setArmError] = useState<string | null>(null)
 
   const fetchArm = async () => {
     if (arm) { setShowArm(v => !v); return }
     setLoadingArm(true)
+    setArmError(null)
     try {
       const data = await merchantsApi.getArm(merchant.merchant_id)
       setArm(data)
       setShowArm(true)
-    } catch { } finally { setLoadingArm(false) }
+    } catch (err) {
+      setArmError(extractErrorMessage(err, 'Failed to load ARM manifest.'))
+    } finally { setLoadingArm(false) }
   }
 
   const categoryColor: Record<string, string> = {
@@ -144,6 +158,13 @@ function MerchantRow({ merchant }: { merchant: Merchant }) {
           </div>
         </div>
       </div>
+
+      {/* ARM error */}
+      {armError && (
+        <div className="p-4 border-t border-white/08">
+          <ErrorState message={armError} onRetry={fetchArm} inline />
+        </div>
+      )}
 
       {/* ARM viewer */}
       {showArm && arm && (

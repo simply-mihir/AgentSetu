@@ -6,8 +6,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FileText, RefreshCw, Search, ChevronDown, ChevronRight } from 'lucide-react'
 import { format } from 'date-fns'
 import Nav from '@/components/ui/Nav'
-import { auditApi, transactionsApi, type Transaction } from '@/lib/api'
+import { auditApi, transactionsApi, extractErrorMessage, type Transaction } from '@/lib/api'
 import EventTimeline from '@/components/audit/EventTimeline'
+import { LoadingState, EmptyState, ErrorState } from '@/components/ui/StateViews'
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
   'intent.received': 'var(--primary)',
@@ -43,10 +44,12 @@ function AuditContent() {
   const [expandedTxn, setExpandedTxn] = useState<string | null>(txnParam)
   const [txnEvents, setTxnEvents] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
 
   const loadData = async () => {
+    setError(null)
     try {
       const [txns, evts] = await Promise.all([
         transactionsApi.list(),
@@ -54,7 +57,9 @@ function AuditContent() {
       ])
       setTransactions(Array.isArray(txns) ? txns : [])
       setEvents(evts.events || [])
-    } catch { } finally {
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Failed to load audit data.'))
+    } finally {
       setLoading(false)
       setRefreshing(false)
     }
@@ -138,16 +143,17 @@ function AuditContent() {
       {/* Transaction list */}
       <div className="space-y-2">
         {loading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="glass-card p-4 shimmer h-16" />
-            ))}
-          </div>
+          <LoadingState message="Loading transactions…" rows={3} />
+        ) : error ? (
+          <ErrorState message={error} onRetry={() => { setRefreshing(true); loadData() }} />
         ) : filteredTxns.length === 0 ? (
-          <div className="glass-card p-12 text-center">
-            <FileText className="text-text-muted mx-auto mb-3" size={32} />
-            <p className="text-text-muted">No transactions yet. Start a purchase in the Buyer tab.</p>
-          </div>
+          <EmptyState
+            icon={<FileText size={32} />}
+            message={search
+              ? 'No transactions match your search.'
+              : 'No transactions yet. Start a purchase in the Buyer tab.'}
+            action={search ? { label: 'Clear search', onClick: () => setSearch('') } : { label: 'Go to Buyer', href: '/buyer' }}
+          />
         ) : (
           filteredTxns.map((txn, i) => (
             <motion.div

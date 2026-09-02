@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Loader2, ShoppingBag, ArrowRight, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
-import { transactionsApi, paymentsApi, type Product, type IntentResponse } from '@/lib/api'
+import { transactionsApi, paymentsApi, extractErrorMessage, type Product, type IntentResponse } from '@/lib/api'
 import Nav from '@/components/ui/Nav'
 import MerchantCard from '@/components/buyer/MerchantCard'
 import ApprovalSheet from '@/components/buyer/ApprovalSheet'
@@ -95,8 +95,9 @@ export default function BuyerPage() {
       setStep('comparing')
 
     } catch (err: any) {
-      toast.error('Failed to process your request')
-      addMessage('agent', 'Sorry, I ran into an issue. Please try again.')
+      const msg = extractErrorMessage(err, 'Failed to process your request.')
+      toast.error(msg)
+      addMessage('agent', `⚠️ ${msg}`)
       setStep('idle')
     }
   }
@@ -138,7 +139,9 @@ export default function BuyerPage() {
       await handleCreatePayment(false)
 
     } catch (err: any) {
-      toast.error('Policy evaluation failed')
+      const msg = extractErrorMessage(err, 'Policy evaluation failed.')
+      toast.error(msg)
+      addMessage('agent', `⚠️ ${msg}`)
       setStep('idle')
     }
   }
@@ -152,7 +155,8 @@ export default function BuyerPage() {
       addMessage('agent', '✅ Your approval has been recorded. Creating payment link…')
       await handleCreatePayment(true)
     } catch (err) {
-      toast.error('Approval failed')
+      const msg = extractErrorMessage(err, 'Approval failed.')
+      toast.error(msg)
       setStep('idle')
     }
   }
