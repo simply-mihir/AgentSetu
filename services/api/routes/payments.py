@@ -22,7 +22,7 @@ from models.merchant import Merchant, Product
 from models.transaction import Transaction, TransactionState
 from models.user import User, UserRole, BuyerProfile
 from models.merchant_user import MerchantUser
-from policy.engine import PolicyEngine, PolicyDecision
+from policy.engine import PolicyEngine, PolicyDecision, BuyerPolicyContext
 from payments.razorpay_adapter import razorpay_adapter, PaymentStatus
 from capability.service import capability_service
 from audit.service import audit_service
@@ -166,14 +166,53 @@ async def create_payment_link(
             ErrorCode.INVENTORY_CHANGED, "Product is no longer available.", 409
         ).body.decode())
 
-    # ── C5 FIX: Load buyer limit from DB, never from client ──────────────────
+    # ── C5 FIX: Load buyer policy from DB, never from client ─────────────────
+    buyer_context = None
     buyer_limit_inr = None
     if current_user.role == UserRole.BUYER:
         buyer_profile = session.exec(
             select(BuyerProfile).where(BuyerProfile.user_id == current_user.user_id)
         ).first()
         if buyer_profile:
+            import json as _json
             buyer_limit_inr = buyer_profile.per_transaction_auto_limit_inr
+
+            # Calculate today's spend for daily limit enforcement
+            from datetime import date
+            today_start = datetime.combine(date.today(), datetime.min.time())
+            daily_txns = session.exec(
+                select(Transaction).where(
+                    Transaction.buyer_id == current_user.user_id,
+                    Transaction.created_at >= today_start,
+                    Transaction.state.in_([
+                        TransactionState.PAYMENT_LINK_CREATED,
+                        TransactionState.PAYMENT_SUCCESS,
+                        TransactionState.RECEIPT_ISSUED,
+                        TransactionState.APPROVED,
+                        TransactionState.PENDING_APPROVAL,
+                    ]),
+                    Transaction.transaction_id != txn.transaction_id,  # exclude current
+                )
+            ).all()
+            daily_spent = sum(t.amount_inr or 0 for t in daily_txns)
+
+            # Parse blocked lists
+            try:
+                blocked_merchants = _json.loads(buyer_profile.blocked_merchants)
+            except Exception:
+                blocked_merchants = []
+            try:
+                blocked_categories = _json.loads(buyer_profile.blocked_categories)
+            except Exception:
+                blocked_categories = []
+
+            buyer_context = BuyerPolicyContext(
+                per_transaction_auto_limit_inr=buyer_profile.per_transaction_auto_limit_inr,
+                daily_limit_inr=buyer_profile.daily_limit_inr,
+                daily_spent_inr=daily_spent,
+                blocked_merchants=blocked_merchants,
+                blocked_categories=blocked_categories,
+            )
 
     # ── Deterministic policy check (final gate) ───────────────────────────────
     is_approved = txn.state == TransactionState.APPROVED and txn.approval_id is not None
@@ -183,6 +222,7 @@ async def create_payment_link(
         amount_inr=txn.amount_inr,
         buyer_limit_inr=buyer_limit_inr,
         is_approved=is_approved,
+        buyer_context=buyer_context,
     )
 
     txn.policy_result = policy_result.decision

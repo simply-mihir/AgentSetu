@@ -2,7 +2,19 @@
 Deterministic Policy Engine.
 The LLM may propose; this code approves.
 All money-movement decisions go through here — no exceptions.
+
+6-step gate (expanded in Phase 3):
+1. Product availability / stock
+2. Merchant active
+3. Merchant restricted category
+4. Buyer blocked merchant        ← Phase 3
+5. Buyer blocked category        ← Phase 3
+6. Amount vs product price
+7. Buyer daily limit             ← Phase 3
+8. Effective spend limit (min of merchant + buyer per-txn)
+9. Approval threshold
 """
+import json
 from enum import Enum
 from typing import List, Optional
 from dataclasses import dataclass, field
@@ -13,6 +25,16 @@ class PolicyDecision(str, Enum):
     ALLOW = "ALLOW"
     DENY = "DENY"
     NEEDS_APPROVAL = "NEEDS_APPROVAL"
+
+
+@dataclass
+class BuyerPolicyContext:
+    """Buyer-side policy data loaded from BuyerProfile (server-side only)."""
+    per_transaction_auto_limit_inr: Optional[int] = None
+    daily_limit_inr: Optional[int] = None
+    daily_spent_inr: int = 0  # sum of today's successful/pending txns
+    blocked_merchants: List[str] = field(default_factory=list)
+    blocked_categories: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -37,6 +59,7 @@ class PolicyEngine:
         amount_inr: int,
         buyer_limit_inr: Optional[int] = None,
         is_approved: bool = False,
+        buyer_context: Optional[BuyerPolicyContext] = None,
     ) -> PolicyResult:
         reason_codes = []
 
@@ -63,7 +86,7 @@ class PolicyEngine:
                 message="Merchant is not currently accepting agent orders."
             )
 
-        # ── 3. Restricted category check ─────────────────────────────────────
+        # ── 3. Merchant restricted category ──────────────────────────────────
         restricted = merchant.get_restricted_categories()
         if product.category.lower() in [r.lower() for r in restricted]:
             return PolicyResult(
@@ -72,7 +95,25 @@ class PolicyEngine:
                 message=f"Category '{product.category}' is restricted for autonomous purchase."
             )
 
-        # ── 4. Exact amount vs product price ─────────────────────────────────
+        # ── 4. Buyer blocked merchant (Phase 3) ─────────────────────────────
+        if buyer_context and buyer_context.blocked_merchants:
+            if merchant.merchant_id in buyer_context.blocked_merchants:
+                return PolicyResult(
+                    decision=PolicyDecision.DENY,
+                    reason_codes=["BUYER_BLOCKED_MERCHANT"],
+                    message=f"You have blocked purchases from '{merchant.name}'."
+                )
+
+        # ── 5. Buyer blocked category (Phase 3) ─────────────────────────────
+        if buyer_context and buyer_context.blocked_categories:
+            if product.category.lower() in [c.lower() for c in buyer_context.blocked_categories]:
+                return PolicyResult(
+                    decision=PolicyDecision.DENY,
+                    reason_codes=["BUYER_BLOCKED_CATEGORY"],
+                    message=f"You have blocked purchases in category '{product.category}'."
+                )
+
+        # ── 6. Exact amount vs product price ─────────────────────────────────
         if amount_inr != product.price_inr:
             return PolicyResult(
                 decision=PolicyDecision.DENY,
@@ -80,12 +121,33 @@ class PolicyEngine:
                 message=f"Requested amount ₹{amount_inr} does not match product price ₹{product.price_inr}."
             )
 
-        # ── 5. Effective spend limit (min of merchant + buyer) ───────────────
+        # ── 7. Buyer daily limit (Phase 3) ───────────────────────────────────
+        if buyer_context and buyer_context.daily_limit_inr is not None:
+            projected = buyer_context.daily_spent_inr + amount_inr
+            if projected > buyer_context.daily_limit_inr:
+                remaining = max(0, buyer_context.daily_limit_inr - buyer_context.daily_spent_inr)
+                return PolicyResult(
+                    decision=PolicyDecision.DENY,
+                    reason_codes=["DAILY_LIMIT_EXCEEDED"],
+                    effective_limit_inr=buyer_context.daily_limit_inr,
+                    message=(
+                        f"This purchase (₹{amount_inr}) would exceed your daily limit "
+                        f"of ₹{buyer_context.daily_limit_inr}. "
+                        f"Spent today: ₹{buyer_context.daily_spent_inr}. "
+                        f"Remaining: ₹{remaining}."
+                    ),
+                )
+
+        # ── 8. Effective spend limit (min of merchant + buyer per-txn) ───────
         merchant_limit = merchant.max_autonomous_spend_inr
-        effective_limit = min(merchant_limit, buyer_limit_inr) if buyer_limit_inr else merchant_limit
+        # buyer_limit_inr (legacy param) or buyer_context.per_transaction_auto_limit_inr
+        effective_buyer_limit = buyer_limit_inr
+        if buyer_context and buyer_context.per_transaction_auto_limit_inr is not None:
+            effective_buyer_limit = buyer_context.per_transaction_auto_limit_inr
+        effective_limit = min(merchant_limit, effective_buyer_limit) if effective_buyer_limit else merchant_limit
         approval_threshold = merchant.approval_threshold_inr
 
-        # ── 6. Over effective limit — DENY without explicit approval ─────────
+        # ── 9. Over effective limit — DENY without explicit approval ─────────
         if amount_inr > effective_limit and not is_approved:
             reason_codes.append("OVER_LIMIT")
             if amount_inr <= approval_threshold or is_approved:
@@ -104,7 +166,7 @@ class PolicyEngine:
                     message=f"Amount ₹{amount_inr} exceeds approval threshold ₹{approval_threshold}."
                 )
 
-        # ── 7. Needs approval (within threshold but above auto limit) ────────
+        # ── 10. Needs approval (within threshold but above auto limit) ───────
         if amount_inr > merchant.max_autonomous_spend_inr and not is_approved:
             return PolicyResult(
                 decision=PolicyDecision.NEEDS_APPROVAL,
@@ -114,7 +176,7 @@ class PolicyEngine:
                 message=f"Amount ₹{amount_inr} requires explicit buyer approval."
             )
 
-        # ── 8. All checks passed ─────────────────────────────────────────────
+        # ── 11. All checks passed ────────────────────────────────────────────
         reason_codes.append("WITHIN_SPEND_CAP")
         reason_codes.append("CATEGORY_ALLOWED")
         if is_approved:
