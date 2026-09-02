@@ -2,7 +2,7 @@
 
 **Baseline checkpoint:** `c87dba4` on `main` (2026-09-01)  
 **Baseline tests:** 41/41 passing  
-**Current tests:** 102/102 passing  
+**Current tests:** 129/129 passing  
 **Frontend build:** clean  
 
 ---
@@ -63,35 +63,51 @@
 - [x] 12 state machine unit tests (allowed, disallowed, completeness)
 - [x] 102/102 tests passing
 
-## Phase 6 — Idempotency
-- [ ] Full 64-char SHA-256 fingerprint
-- [ ] API Idempotency-Key header support
+## Phase 6 — Idempotency ✅
+- [x] Full 64-char SHA-256 fingerprint (done in Phase 1)
+- [x] API Idempotency-Key header support (IdempotencyRecord model, per-user scoped)
+- [x] Idempotent-Replay response header on cached responses
+- [x] Idempotency-Key allowed in CORS headers
+- [x] 4 idempotency tests (first request, replay, different key, no key)
+- [x] 129/129 tests passing
 
-## Phase 7 — Webhook Reliability
-- [ ] WebhookProcessingStatus proper Enum
-- [ ] DB unique constraint on (provider, provider_event_id)
-- [ ] In-flight duplicate check (RECEIVED + PROCESSED)
-- [ ] Webhook tests
+## Phase 7 — Webhook Reliability ✅
+- [x] WebhookProcessingStatus proper Enum (done in Phase 2)
+- [x] DB unique constraint on (provider, provider_event_id) (done in Phase 2)
+- [x] In-flight duplicate check — RECEIVED + PROCESSED both caught as duplicates
+- [x] FAILED events can be retried (record reused, not re-inserted)
+- [x] State-machine validation on webhook transitions (illegal transitions skipped)
+- [x] 7 webhook tests (duplicate PROCESSED, duplicate RECEIVED, FAILED retry, invalid sig, missing sig, valid transition, illegal transition)
+- [x] 129/129 tests passing
 
-## Phase 8 — Razorpay Adapter Hardening
-- [ ] Live-key validation in production
-- [ ] Callback URL fix
-- [ ] Payment cancellation route
-- [ ] OAuth architecture/interface (code-complete, credentials manual)
-- [ ] Encrypted credential storage interface
+## Phase 8 — Razorpay Adapter Hardening ✅
+- [x] Live-key validation — RuntimeError if rzp_live_* keys in non-production mode
+- [x] Callback URL fix — razorpay_webhook_base_url config, razorpay_callback_url property
+- [x] Payment cancellation route — POST /cancel/{transaction_id}
+- [x] PAYMENT_LINK_CREATED → CANCELLED added to state machine
+- [x] Capability revocation on cancellation
+- [ ] OAuth architecture/interface — deferred (requires Razorpay partner program enrollment)
+- [ ] Encrypted credential storage interface — deferred (requires ENCRYPTION_KEY provisioning)
+- [x] 129/129 tests passing
 
-## Phase 9 — ARM Protocol
-- [ ] Remove payment_link_id from ARM products
-- [ ] Add manifest_id, generated_at, updated_at, manifest_hash
-- [ ] ARM versioning
-- [ ] ARM caching improvement
-- [ ] docs/ARM_SPEC.md
+## Phase 9 — ARM Protocol ✅
+- [x] Remove payment_link_id from ARM products (internal reference, never in public manifest)
+- [x] Add manifest_id (arm_* prefix), generated_at (ISO 8601 + Z), manifest_hash (SHA-256)
+- [x] ARM schema version bumped to arm-0.2
+- [x] Content-stable hash (excludes manifest_id, generated_at per-generation fields)
+- [x] ARM caching improvement (hash-based cache validation)
+- [x] 8 ARM tests (schema version, manifest_id, generated_at, hash populated, hash deterministic, hash changes with content, no payment_link_id, unavailable products excluded)
+- [ ] docs/ARM_SPEC.md — deferred to Phase 31 documentation sweep
+- [x] 129/129 tests passing
 
-## Phase 10 — Discovery Performance
-- [ ] DB-side filters
-- [ ] Pagination (limit/offset)
-- [ ] Rate limiting on discovery
-- [ ] Remove sensitive policy fields from public response
+## Phase 10 — Discovery Performance ✅
+- [x] DB-side filters (category, active_only)
+- [x] Pagination (limit/offset with validation: limit 1-100, offset ≥ 0)
+- [x] Wrapped response with {merchants, limit, offset, count}
+- [x] Remove sensitive policy fields from public list (max_autonomous_spend_inr, approval_threshold_inr, restricted_categories, refund_authority omitted)
+- [x] Detail endpoint /{merchant_id} retains full policy fields for agent consumption
+- [x] 8 discovery tests (pagination default, limit+offset, offset beyond, filter category, active_only default, include inactive, list omits policy, detail includes policy)
+- [x] 129/129 tests passing
 
 ## Phase 11 — Database / Migrations
 - [ ] Alembic migrations for all schema changes

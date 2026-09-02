@@ -44,10 +44,20 @@ class RazorpayAdapter:
     @property
     def client(self):
         if self._client is None:
+            # Phase 8: Validate key safety before initializing client
+            self._validate_key_safety()
             self._client = razorpay.Client(
                 auth=(settings.razorpay_key_id, settings.razorpay_key_secret)
             )
         return self._client
+
+    def _validate_key_safety(self):
+        """Phase 8: Prevent live keys in non-production environments."""
+        if settings.razorpay_is_live and not settings.is_production:
+            raise RuntimeError(
+                "SECURITY: Razorpay LIVE keys detected in non-production mode. "
+                "Set APP_MODE=production or use test keys (rzp_test_*)."
+            )
 
     def create_payment_link(
         self,
@@ -79,7 +89,7 @@ class RazorpayAdapter:
                 "product_name": product_name,
                 "source": "agentsetu",
             },
-            "callback_url": f"{settings.base_url}/v1/webhooks/razorpay",
+            "callback_url": settings.razorpay_callback_url,
             "callback_method": "get",
         }
 

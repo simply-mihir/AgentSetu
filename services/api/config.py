@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     razorpay_key_id: str = "rzp_test_demo"
     razorpay_key_secret: str = "demo_secret"
     razorpay_webhook_secret: str = "demo_webhook"
+    razorpay_webhook_base_url: str = ""     # Phase 8: separate URL for webhooks (public-facing)
     razorpay_oauth_client_id: str = ""
     razorpay_oauth_client_secret: str = ""
 
@@ -65,6 +66,12 @@ class Settings(BaseSettings):
     @property
     def razorpay_is_live(self) -> bool:
         return self.razorpay_key_id.startswith("rzp_live_")
+
+    @property
+    def razorpay_callback_url(self) -> str:
+        """Phase 8: Use dedicated webhook URL if set, else fall back to base_url."""
+        base = self.razorpay_webhook_base_url or self.base_url
+        return f"{base}/v1/webhooks/razorpay"
 
     @property
     def effective_secret_key(self) -> str:

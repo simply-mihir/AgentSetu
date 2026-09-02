@@ -42,6 +42,7 @@ ALLOWED_TRANSITIONS: dict[TransactionState, set[TransactionState]] = {
         TransactionState.PAYMENT_SUCCESS,
         TransactionState.PAYMENT_FAILED,
         TransactionState.PAYMENT_UNKNOWN,
+        TransactionState.CANCELLED,  # Phase 8: user/merchant can cancel unpaid link
     },
     TransactionState.PAYMENT_SUCCESS: {
         TransactionState.RECEIPT_ISSUED,

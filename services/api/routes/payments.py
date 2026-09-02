@@ -9,9 +9,10 @@ No LLM touches this flow. Amount is verified server-side against DB.
 All endpoints require authentication (C2 fix).
 """
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from slowapi import Limiter
@@ -22,6 +23,7 @@ from models.merchant import Merchant, Product
 from models.transaction import Transaction, TransactionState, validate_transition
 from models.user import User, UserRole, BuyerProfile
 from models.merchant_user import MerchantUser
+from models.idempotency import IdempotencyRecord
 from policy.engine import PolicyEngine, PolicyDecision, BuyerPolicyContext
 from payments.razorpay_adapter import razorpay_adapter, PaymentStatus
 from capability.service import capability_service
@@ -71,6 +73,7 @@ async def create_payment_link(
 ):
     """
     Full payment gate:
+    0. Idempotency-Key check (return cached response for retries)
     1. Load transaction + verify state + verify caller authorization
     2. Verify amount has not changed
     3. Load buyer limits from DB (never from client)
@@ -80,6 +83,23 @@ async def create_payment_link(
     7. Call Razorpay (server-side only)
     8. Record audit event
     """
+    # ── Phase 6: Idempotency-Key header ──────────────────────────────────────
+    idempotency_key = request.headers.get("Idempotency-Key")
+    if idempotency_key:
+        existing_record = session.exec(
+            select(IdempotencyRecord).where(
+                IdempotencyRecord.idempotency_key == idempotency_key,
+                IdempotencyRecord.user_id == current_user.user_id,
+                IdempotencyRecord.endpoint == "POST /v1/payments/payment-link",
+            )
+        ).first()
+        if existing_record:
+            return JSONResponse(
+                status_code=existing_record.status_code,
+                content=json.loads(existing_record.response_body),
+                headers={"Idempotency-Key": idempotency_key, "X-Idempotent-Replay": "true"},
+            )
+
     txn = session.exec(
         select(Transaction).where(Transaction.transaction_id == body.transaction_id)
     ).first()
@@ -354,7 +374,8 @@ async def create_payment_link(
     )
 
     session.commit()
-    return {
+
+    success_response = {
         "transaction_id": txn.transaction_id,
         "payment_link_id": link_result.payment_link_id,
         "payment_link_url": link_result.payment_link_url,
@@ -364,6 +385,21 @@ async def create_payment_link(
         "needs_approval": False,
         "capability_id": cap.capability_id,
     }
+
+    # ── Phase 6: Store idempotency record ────────────────────────────────────
+    if idempotency_key:
+        record = IdempotencyRecord(
+            idempotency_key=idempotency_key,
+            endpoint="POST /v1/payments/payment-link",
+            user_id=current_user.user_id,
+            status_code=200,
+            response_body=json.dumps(success_response),
+            expires_at=datetime.utcnow() + timedelta(hours=24),
+        )
+        session.add(record)
+        session.commit()
+
+    return success_response
 
 
 @router.post("/verify/{transaction_id}", summary="Verify payment status (no auto-retry)")
@@ -520,4 +556,66 @@ async def get_receipt(
             }
             for e in events
         ],
+    }
+
+
+@router.post("/cancel/{transaction_id}", summary="Cancel a pending payment link")
+async def cancel_payment(
+    transaction_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Phase 8: Cancel a Razorpay payment link before it is paid.
+    Only valid when transaction is in PAYMENT_LINK_CREATED state.
+    """
+    txn = session.exec(
+        select(Transaction).where(Transaction.transaction_id == transaction_id)
+    ).first()
+    if not txn:
+        raise HTTPException(status_code=404, detail=make_error(
+            ErrorCode.NOT_FOUND, "Transaction not found.", 404
+        ).body.decode())
+
+    _assert_payment_txn_access(txn, current_user, session)
+
+    if txn.state != TransactionState.PAYMENT_LINK_CREATED:
+        raise HTTPException(status_code=400, detail=make_error(
+            ErrorCode.VALIDATION,
+            f"Cannot cancel payment in state: {txn.state}. Only PAYMENT_LINK_CREATED can be cancelled.",
+            400,
+        ).body.decode())
+
+    if not txn.razorpay_payment_link_id:
+        raise HTTPException(status_code=400, detail=make_error(
+            ErrorCode.VALIDATION, "No payment link to cancel.", 400
+        ).body.decode())
+
+    # Call Razorpay
+    cancelled = razorpay_adapter.cancel_payment_link(txn.razorpay_payment_link_id)
+
+    txn.state = TransactionState.CANCELLED
+    txn.failure_reason = "cancelled_by_user"
+    txn.updated_at = datetime.utcnow()
+    session.add(txn)
+
+    # Revoke any outstanding capabilities
+    capability_service.revoke_for_transaction(session, txn.transaction_id, reason="user_cancelled")
+
+    audit_service.record(
+        session=session,
+        transaction_id=txn.transaction_id,
+        correlation_id=txn.correlation_id,
+        actor=current_user.user_id,
+        event_type="payment.cancelled",
+        input_summary={"razorpay_cancelled": cancelled},
+        result="cancelled_by_user",
+        next_state="CANCELLED",
+    )
+
+    session.commit()
+    return {
+        "transaction_id": txn.transaction_id,
+        "state": txn.state,
+        "razorpay_cancelled": cancelled,
     }

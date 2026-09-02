@@ -178,14 +178,34 @@ async def import_merchant(
 
 
 @router.get("/", summary="List all merchants")
-async def list_merchants(session: Session = Depends(get_session)):
-    """Public catalog endpoint — lists active merchants."""
-    merchants = session.exec(select(Merchant)).all()
+async def list_merchants(
+    session: Session = Depends(get_session),
+    category: Optional[str] = Query(default=None, description="Filter by merchant category"),
+    active_only: bool = Query(default=True, description="Only show active merchants"),
+    limit: int = Query(default=20, ge=1, le=100, description="Max results"),
+    offset: int = Query(default=0, ge=0, description="Pagination offset"),
+):
+    """
+    Public catalog endpoint — lists active merchants.
+    Phase 10: DB-side filtering, pagination, sensitive fields removed.
+    """
+    from sqlalchemy import func
+
+    query = select(Merchant)
+    if active_only:
+        query = query.where(Merchant.is_active == True)
+    if category:
+        query = query.where(Merchant.category == category)
+    query = query.offset(offset).limit(limit)
+
+    merchants = session.exec(query).all()
+
+    # DB-side product count via subquery per merchant
     result = []
     for m in merchants:
-        products = session.exec(
-            select(Product).where(Product.merchant_id == m.merchant_id)
-        ).all()
+        product_count = session.exec(
+            select(func.count()).where(Product.merchant_id == m.merchant_id)
+        ).one()
         result.append({
             "merchant_id": m.merchant_id,
             "name": m.name,
@@ -193,9 +213,17 @@ async def list_merchants(session: Session = Depends(get_session)):
             "description": m.description,
             "category": m.category,
             "is_active": m.is_active,
-            "product_count": len(products),
+            "product_count": product_count,
+            # Phase 10: max_autonomous_spend_inr, approval_threshold_inr,
+            # restricted_categories, refund_authority intentionally OMITTED
+            # from the public list. They are internal policy fields.
         })
-    return result
+    return {
+        "merchants": result,
+        "limit": limit,
+        "offset": offset,
+        "count": len(result),
+    }
 
 
 @router.get("/{merchant_id}/arm", summary="Get ARM manifest for a merchant")
