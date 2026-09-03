@@ -8,6 +8,7 @@ import json
 import logging
 from datetime import datetime
 from fastapi import APIRouter, Request, HTTPException, Depends
+from utils.time import utc_now
 from sqlmodel import Session, select
 
 from database import get_session
@@ -136,7 +137,7 @@ async def razorpay_webhook(request: Request, session: Session = Depends(get_sess
         return {"received": True, "matched": True, "skipped": True, "reason": "illegal_transition"}
 
     txn.state = new_state
-    txn.updated_at = datetime.utcnow()
+    txn.updated_at = utc_now()
     session.add(txn)
 
     audit_service.record(
@@ -198,7 +199,7 @@ def _persist_webhook_event(
 
 def _mark_webhook_processed(session: Session, wh: WebhookEvent, status: str, error: str = None):
     wh.processing_status = status
-    wh.processed_at = datetime.utcnow()
+    wh.processed_at = utc_now()
     if error:
         wh.error_message = error
     session.add(wh)

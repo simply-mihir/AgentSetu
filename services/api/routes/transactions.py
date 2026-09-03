@@ -11,6 +11,7 @@ import hashlib
 import uuid
 from datetime import datetime
 from typing import Optional
+from utils.time import utc_now
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -23,7 +24,7 @@ from models.merchant_user import MerchantUser
 from policy.engine import PolicyEngine, PolicyDecision
 from ai.orchestrator import buyer_orchestrator
 from audit.service import audit_service
-from auth.dependencies import get_current_user, get_optional_user
+from auth.dependencies import get_current_user
 
 router = APIRouter()
 policy_engine = PolicyEngine()
@@ -81,7 +82,7 @@ def _assert_txn_access(txn: Transaction, user: User, session: Session):
 async def process_intent(
     request: IntentRequest,
     session: Session = Depends(get_session),
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Full buyer intent pipeline:
@@ -157,7 +158,7 @@ async def process_intent(
 
     # ── 4. Create transaction ─────────────────────────────────────────────────
     txn = Transaction(
-        buyer_id=current_user.user_id if current_user else None,
+        buyer_id=current_user.user_id,
         buyer_intent=request.message,
         parsed_constraints=json.dumps(constraints),
         candidates_json=json.dumps(ranked[:5]),
@@ -172,7 +173,7 @@ async def process_intent(
         session=session,
         transaction_id=txn.transaction_id,
         correlation_id=txn.correlation_id,
-        actor=current_user.user_id if current_user else "anonymous",
+        actor=current_user.user_id,
         event_type="intent.received",
         input_summary={"message": request.message},
         next_state="DRAFT",
@@ -234,7 +235,7 @@ async def process_intent(
 async def select_product(
     request: SelectProductRequest,
     session: Session = Depends(get_session),
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
 ):
     txn = session.exec(
         select(Transaction).where(Transaction.transaction_id == request.transaction_id)
@@ -242,12 +243,8 @@ async def select_product(
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    # If user is authenticated, bind or verify ownership
-    if current_user:
-        if txn.buyer_id and txn.buyer_id != current_user.user_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this transaction")
-        if not txn.buyer_id:
-            txn.buyer_id = current_user.user_id
+    # N1 FIX: Verify ownership — only the buyer who created the txn (or admin) can select
+    _assert_txn_access(txn, current_user, session)
 
     product = session.exec(
         select(Product).where(
@@ -276,7 +273,7 @@ async def select_product(
     txn.merchant_name = merchant.name
     txn.amount_inr = product.price_inr
     txn.state = target_state
-    txn.updated_at = datetime.utcnow()
+    txn.updated_at = utc_now()
 
     session.add(txn)
     session.commit()
@@ -299,6 +296,7 @@ async def select_product(
 async def evaluate_policy(
     request: EvaluatePolicyRequest,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     merchant = session.exec(
         select(Merchant).where(Merchant.merchant_id == request.merchant_id)
@@ -359,7 +357,7 @@ async def approve_transaction(
     txn.approval_id = approval_id
     # H1 FIX: approved_by derived from auth context, NEVER from request body
     txn.approved_by = current_user.user_id
-    txn.approved_at = datetime.utcnow()
+    txn.approved_at = utc_now()
     txn.state = TransactionState.APPROVED
 
     # Bind buyer if not already bound
@@ -372,7 +370,7 @@ async def approve_transaction(
             txn.merchant_id, txn.product_id, txn.amount_inr, approval_id
         )
 
-    txn.updated_at = datetime.utcnow()
+    txn.updated_at = utc_now()
     session.add(txn)
     session.commit()
     session.refresh(txn)

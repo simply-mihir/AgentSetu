@@ -10,6 +10,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret")
 import pytest
 from datetime import datetime, timedelta
 from sqlmodel import Session, create_engine, SQLModel
+from utils.time import utc_now
 from capability.service import CapabilityService
 from models.capability import AuthorizationCapability, CapabilityStatus
 
@@ -103,7 +104,7 @@ class TestConsumeCapability:
                 AuthorizationCapability.capability_id == cap.capability_id
             )
         ).first()
-        refreshed.expires_at = datetime.utcnow() - timedelta(seconds=1)
+        refreshed.expires_at = utc_now() - timedelta(seconds=1)
         session.add(refreshed)
         session.commit()
 
@@ -125,8 +126,9 @@ class TestRevokeCapability:
         result = svc.revoke_capability(session, cap.capability_id, "price_changed")
         assert result is True
 
-    def test_revoke_already_revoked_is_noop(self, svc, session):
+    def test_revoke_already_revoked_is_idempotent(self, svc, session):
+        """L6 FIX: revoke on already-terminal capability returns True (idempotent)."""
         cap = svc.issue_capability(session, "txn_01", "merch_01", "prod_01", 299)
         svc.revoke_capability(session, cap.capability_id)
         result = svc.revoke_capability(session, cap.capability_id)  # Second call
-        assert result is False  # Already revoked — idempotent noop
+        assert result is True  # L6: idempotent — already revoked is success

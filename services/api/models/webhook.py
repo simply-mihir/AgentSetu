@@ -5,6 +5,7 @@ from typing import Optional
 from datetime import datetime
 from enum import Enum
 import uuid
+from utils.time import utc_now
 
 
 class WebhookProcessingStatus(str, Enum):
@@ -42,5 +43,5 @@ class WebhookEvent(SQLModel, table=True):
     transaction_id: Optional[str] = Field(default=None, index=True)
     payment_link_id: Optional[str] = None
 
-    received_at: datetime = Field(default_factory=datetime.utcnow)
+    received_at: datetime = Field(default_factory=utc_now)
     processed_at: Optional[datetime] = None

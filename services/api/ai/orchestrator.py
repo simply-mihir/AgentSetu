@@ -74,7 +74,10 @@ class BuyerOrchestrator:
     @property
     def client(self):
         if self._client is None:
-            self._client = OpenAI(api_key=settings.openai_api_key)
+            kwargs: dict = {"api_key": settings.openai_api_key}
+            if settings.openai_base_url:
+                kwargs["base_url"] = settings.openai_base_url
+            self._client = OpenAI(**kwargs)
         return self._client
 
     def parse_intent(self, user_message: str) -> dict:

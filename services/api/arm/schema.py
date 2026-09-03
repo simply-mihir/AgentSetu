@@ -8,6 +8,7 @@ import json
 import uuid
 from datetime import datetime
 from pydantic import BaseModel, Field
+from utils.time import utc_now
 from typing import List
 
 
@@ -45,7 +46,7 @@ class ARMMerchant(BaseModel):
 class ARMManifest(BaseModel):
     schema_version: str = "arm-0.2"
     manifest_id: str = Field(default_factory=lambda: f"arm_{uuid.uuid4().hex[:12]}")
-    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    generated_at: str = Field(default_factory=lambda: utc_now().isoformat() + "Z")
     manifest_hash: str = ""     # Computed after serialization
     merchant: ARMMerchant
     products: List[ARMProduct]

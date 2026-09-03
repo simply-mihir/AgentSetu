@@ -1,8 +1,21 @@
-"""ARM manifest generator from merchant DB records."""
+"""ARM manifest generator from merchant DB records.
+
+L1 FIX: TTL-based caching — cached ARM is returned if it was generated
+within the last ARM_CACHE_TTL_SECONDS and its content hash hasn't changed.
+"""
+import json
+import logging
+from datetime import timedelta
 from typing import Optional
 from sqlmodel import Session, select
+from utils.time import utc_now
 from models.merchant import Merchant, Product
 from arm.schema import ARMManifest, ARMMerchant, ARMProduct, ARMPolicies
+
+logger = logging.getLogger(__name__)
+
+# L1: ARM cache TTL — serve cached manifest if generated within this window
+ARM_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
 def generate_arm(merchant: Merchant, products: list[Product]) -> ARMManifest:
@@ -47,22 +60,59 @@ def generate_arm(merchant: Merchant, products: list[Product]) -> ARMManifest:
     return manifest
 
 
-def get_or_generate_arm(merchant_id: str, session: Session) -> Optional[ARMManifest]:
+def get_or_generate_arm(
+    merchant_id: str,
+    session: Session,
+    force_refresh: bool = False,
+) -> Optional[ARMManifest]:
+    """Return cached ARM if fresh, otherwise regenerate.
+
+    L1 FIX: TTL-based read-back — if the cached ARM was generated within
+    ARM_CACHE_TTL_SECONDS and the underlying data hasn't changed (content
+    hash matches), return the cached version without hitting the product table.
+    """
     merchant = session.exec(
         select(Merchant).where(Merchant.merchant_id == merchant_id)
     ).first()
     if not merchant:
         return None
 
+    # L1: Try cached ARM first (skip if force_refresh)
+    if not force_refresh and merchant.arm_json:
+        try:
+            cached = ARMManifest.model_validate_json(merchant.arm_json)
+            # Check TTL — generated_at is ISO format with trailing Z
+            from datetime import datetime, timezone
+            generated_at = datetime.fromisoformat(cached.generated_at.rstrip("Z")).replace(tzinfo=None)
+            age = (utc_now() - generated_at).total_seconds()
+            if age < ARM_CACHE_TTL_SECONDS:
+                logger.debug("ARM cache hit for %s (age=%.0fs)", merchant_id, age)
+                return cached
+            logger.debug("ARM cache expired for %s (age=%.0fs)", merchant_id, age)
+        except Exception:
+            logger.debug("ARM cache parse failed for %s — regenerating", merchant_id)
+
+    # Cache miss or expired — regenerate
     products = session.exec(
         select(Product).where(Product.merchant_id == merchant_id)
     ).all()
 
     manifest = generate_arm(merchant, list(products))
 
+    # L1: Compare content hash to avoid unnecessary DB writes
+    if merchant.arm_json:
+        try:
+            old = ARMManifest.model_validate_json(merchant.arm_json)
+            if old.manifest_hash == manifest.manifest_hash:
+                # Content unchanged — update only generated_at timestamp
+                manifest.manifest_id = old.manifest_id
+        except Exception:
+            pass
+
     # Cache in DB
     merchant.arm_json = manifest.model_dump_json()
     session.add(merchant)
     session.commit()
 
+    logger.debug("ARM regenerated for %s", merchant_id)
     return manifest

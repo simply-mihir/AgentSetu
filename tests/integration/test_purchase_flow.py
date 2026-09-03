@@ -58,7 +58,7 @@ def seeded_merchant(session):
 class TestAutoApprovedFlow:
     def test_cheap_product_gets_allow(self, client, seeded_merchant, buyer_headers):
         """Product within auto-limit should get ALLOW without approval."""
-        r = client.post("/v1/transactions/intent", json={"message": "buy cheap grocery"})
+        r = client.post("/v1/transactions/intent", json={"message": "buy cheap grocery"}, headers=buyer_headers)
         assert r.status_code == 200
         txn_id = r.json()["transaction_id"]
 
@@ -66,7 +66,7 @@ class TestAutoApprovedFlow:
             "transaction_id": txn_id,
             "product_id": "int_prod_cheap",
             "merchant_id": "int_merch_01",
-        })
+        }, headers=buyer_headers)
         assert r.status_code == 200
 
         r = client.post(
@@ -84,7 +84,7 @@ class TestAutoApprovedFlow:
 class TestApprovalRequiredFlow:
     def test_expensive_product_needs_approval(self, client, seeded_merchant, buyer_headers):
         """Product above auto-limit should require approval."""
-        r = client.post("/v1/transactions/intent", json={"message": "buy expensive item"})
+        r = client.post("/v1/transactions/intent", json={"message": "buy expensive item"}, headers=buyer_headers)
         assert r.status_code == 200
         txn_id = r.json()["transaction_id"]
 
@@ -92,7 +92,7 @@ class TestApprovalRequiredFlow:
             "transaction_id": txn_id,
             "product_id": "int_prod_expensive",
             "merchant_id": "int_merch_01",
-        })
+        }, headers=buyer_headers)
         assert r.status_code == 200
 
         r = client.post(
@@ -107,14 +107,14 @@ class TestApprovalRequiredFlow:
 
     def test_approval_then_payment_allowed(self, client, seeded_merchant, buyer_headers):
         """After buyer approves, payment should be allowed."""
-        r = client.post("/v1/transactions/intent", json={"message": "buy expensive"})
+        r = client.post("/v1/transactions/intent", json={"message": "buy expensive"}, headers=buyer_headers)
         txn_id = r.json()["transaction_id"]
 
         client.post("/v1/transactions/select", json={
             "transaction_id": txn_id,
             "product_id": "int_prod_expensive",
             "merchant_id": "int_merch_01",
-        })
+        }, headers=buyer_headers)
 
         r = client.post(
             "/v1/transactions/approve",
@@ -151,13 +151,13 @@ class TestBlockedFlow:
         ))
         session.commit()
 
-        r = client.post("/v1/transactions/intent", json={"message": "buy from inactive"})
+        r = client.post("/v1/transactions/intent", json={"message": "buy from inactive"}, headers=buyer_headers)
         txn_id = r.json()["transaction_id"]
         client.post("/v1/transactions/select", json={
             "transaction_id": txn_id,
             "product_id": "inactive_prod",
             "merchant_id": "inactive_merch",
-        })
+        }, headers=buyer_headers)
 
         r = client.post(
             "/v1/payments/payment-link",

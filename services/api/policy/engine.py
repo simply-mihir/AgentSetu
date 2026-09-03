@@ -149,7 +149,8 @@ class PolicyEngine:
         # ── 9. Over effective limit — DENY without explicit approval ─────────
         if amount_inr > effective_limit and not is_approved:
             reason_codes.append("OVER_LIMIT")
-            if amount_inr <= approval_threshold or is_approved:
+            # L4 FIX: Removed dead `or is_approved` — is_approved is always False here
+            if amount_inr <= approval_threshold:
                 return PolicyResult(
                     decision=PolicyDecision.NEEDS_APPROVAL,
                     reason_codes=["NEEDS_APPROVAL", "OVER_AUTO_LIMIT"],

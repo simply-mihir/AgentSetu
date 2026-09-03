@@ -6,18 +6,19 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from config import settings
+from utils.time import utc_now
 
 ALGORITHM = "HS256"
 
 
 def create_access_token(subject: str, role: str, extra: dict = None) -> str:
     """Create a signed JWT for the given user."""
-    expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+    expire = utc_now() + timedelta(minutes=settings.access_token_expire_minutes)
     payload = {
         "sub": subject,           # user_id
         "role": role,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": utc_now(),
     }
     if extra:
         payload.update(extra)

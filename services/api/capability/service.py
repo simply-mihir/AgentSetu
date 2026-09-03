@@ -17,6 +17,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from sqlmodel import Session, select
+from utils.time import utc_now
 
 from models.capability import AuthorizationCapability, CapabilityStatus
 
@@ -73,7 +74,7 @@ class CapabilityService:
             transaction_id=transaction_id,
             approval_id=approval_id,
             amount_inr=amount_inr,
-            expires_at=datetime.utcnow() + timedelta(minutes=ttl_minutes),
+            expires_at=utc_now() + timedelta(minutes=ttl_minutes),
         )
         # Compute payload hash for integrity
         cap.payload_hash = hashlib.sha256(_canonical_payload(cap).encode()).hexdigest()
@@ -112,7 +113,7 @@ class CapabilityService:
         if cap.status == CapabilityStatus.REVOKED:
             return False, "CAPABILITY_REVOKED"
 
-        if cap.status == CapabilityStatus.EXPIRED or datetime.utcnow() > cap.expires_at:
+        if cap.status == CapabilityStatus.EXPIRED or utc_now() > cap.expires_at:
             # Lazily mark expired
             if cap.status == CapabilityStatus.ACTIVE:
                 cap.status = CapabilityStatus.EXPIRED
@@ -165,7 +166,7 @@ class CapabilityService:
         if cap.status == CapabilityStatus.REVOKED:
             return False, "CAPABILITY_REVOKED"
 
-        if cap.status == CapabilityStatus.EXPIRED or datetime.utcnow() > cap.expires_at:
+        if cap.status == CapabilityStatus.EXPIRED or utc_now() > cap.expires_at:
             if cap.status == CapabilityStatus.ACTIVE:
                 cap.status = CapabilityStatus.EXPIRED
                 session.add(cap)
@@ -188,7 +189,7 @@ class CapabilityService:
 
         # Atomically consume
         cap.status = CapabilityStatus.CONSUMED
-        cap.consumed_at = datetime.utcnow()
+        cap.consumed_at = utc_now()
         session.add(cap)
         session.flush()  # flush within transaction — caller commits
         logger.info(f"Capability consumed: {capability_id} | txn={transaction_id}")
@@ -200,7 +201,7 @@ class CapabilityService:
         capability_id: str,
         reason: str = "revoked",
     ) -> bool:
-        """Revoke a capability. Safe to call on already-revoked/expired capabilities."""
+        """Revoke a capability. Idempotent — returns True for already-terminal states (L6 fix)."""
         cap = session.exec(
             select(AuthorizationCapability).where(
                 AuthorizationCapability.capability_id == capability_id
@@ -208,11 +209,12 @@ class CapabilityService:
         ).first()
         if not cap:
             return False
-        if cap.status not in (CapabilityStatus.ACTIVE,):
-            return False
+        # L6 FIX: Already in terminal state → idempotent success
+        if cap.status in (CapabilityStatus.CONSUMED, CapabilityStatus.REVOKED, CapabilityStatus.EXPIRED):
+            return True
 
         cap.status = CapabilityStatus.REVOKED
-        cap.revoked_at = datetime.utcnow()
+        cap.revoked_at = utc_now()
         cap.revoke_reason = reason
         session.add(cap)
         session.commit()

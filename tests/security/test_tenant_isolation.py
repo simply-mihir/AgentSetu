@@ -129,13 +129,13 @@ class TestBuyerTransactionIsolation:
         })
         buyer_b = {"Authorization": f"Bearer {r.json()['access_token']}"}
 
-        # Buyer A creates an intent (anonymous, then claims via approve)
-        r = client.post("/v1/transactions/intent", json={"message": "buyer a item"})
+        # Buyer A creates an intent (auth required — N1 fix)
+        r = client.post("/v1/transactions/intent", json={"message": "buyer a item"}, headers=buyer_a)
         txn_a = r.json()["transaction_id"]
         client.post("/v1/transactions/approve", json={"transaction_id": txn_a}, headers=buyer_a)
 
         # Buyer B creates an intent
-        r = client.post("/v1/transactions/intent", json={"message": "buyer b item"})
+        r = client.post("/v1/transactions/intent", json={"message": "buyer b item"}, headers=buyer_b)
         txn_b = r.json()["transaction_id"]
         client.post("/v1/transactions/approve", json={"transaction_id": txn_b}, headers=buyer_b)
 
@@ -215,10 +215,10 @@ class TestAuditTenantScoping:
         })
         buyer_headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
 
-        # Create a transaction that will generate audit events
-        r = client.post("/v1/transactions/intent", json={"message": "test audit scoping"})
+        # Create a transaction that will generate audit events (auth required — N1 fix)
+        r = client.post("/v1/transactions/intent", json={"message": "test audit scoping"}, headers=buyer_headers)
         txn_id = r.json()["transaction_id"]
-        # Approve to bind buyer_id and generate an audit event
+        # Approve to generate an audit event
         client.post("/v1/transactions/approve", json={"transaction_id": txn_id}, headers=buyer_headers)
 
         # Fetch audit — should only show this buyer's events

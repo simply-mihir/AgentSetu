@@ -30,9 +30,8 @@ logger = logging.getLogger(__name__)
 _testing = os.environ.get("TESTING", "").lower() in ("1", "true")
 limiter = Limiter(key_func=get_remote_address, enabled=not _testing)
 
-# Phase 12: In-memory token revocation set (production would use Redis)
-# Stores JTIs (JWT IDs) of revoked tokens until they naturally expire
-_revoked_jtis: set[str] = set()
+# N4 FIX: Redis-backed JTI revocation (falls back to in-memory if Redis unavailable)
+from auth.revocation import revoke_jti, is_revoked
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
@@ -70,8 +69,8 @@ def _validate_password(password: str) -> list[str]:
 
 
 def is_token_revoked(jti: str) -> bool:
-    """Check if a JWT ID has been revoked."""
-    return jti in _revoked_jtis
+    """Check if a JWT ID has been revoked. Delegates to Redis-backed store."""
+    return is_revoked(jti)
 
 
 @router.post("/signup", response_model=TokenResponse, summary="Create a new account")
@@ -163,12 +162,16 @@ async def logout(
     user: User = Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
-    """Phase 12: Logout by revoking the current token's JTI."""
+    """N4 FIX: Logout by revoking the current token's JTI via Redis-backed store."""
     from auth.jwt import decode_access_token
     payload = decode_access_token(credentials.credentials)
     if payload and payload.get("jti"):
-        _revoked_jtis.add(payload["jti"])
-        logger.info(f"Token revoked for user {user.user_id} (jti={payload['jti']})")
+        # Calculate remaining TTL so Redis auto-cleans expired revocations
+        import time
+        exp = payload.get("exp", 0)
+        remaining = max(int(exp - time.time()), 60)  # at least 60s
+        revoke_jti(payload["jti"], ttl_seconds=remaining)
+        logger.info(f"Token revoked for user {user.user_id} (jti={payload['jti']}, ttl={remaining}s)")
     return {"success": True, "message": "Token revoked."}
 
 

@@ -4,6 +4,7 @@ from typing import Optional
 from datetime import datetime
 from enum import Enum
 import uuid
+from utils.time import utc_now
 
 
 class UserRole(str, Enum):
@@ -35,8 +36,8 @@ class User(SQLModel, table=True):
     role: UserRole = UserRole.BUYER
     status: UserStatus = UserStatus.ACTIVE
     email_verified: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class BuyerProfile(SQLModel, table=True):
@@ -55,5 +56,5 @@ class BuyerProfile(SQLModel, table=True):
     blocked_merchants: str = "[]"
 
     default_currency: str = "INR"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)

@@ -4,6 +4,7 @@ from sqlalchemy import UniqueConstraint
 from typing import Optional
 from datetime import datetime
 from enum import Enum
+from utils.time import utc_now
 
 
 class MerchantUserRole(str, Enum):
@@ -22,4 +23,4 @@ class MerchantUser(SQLModel, table=True):
     merchant_id: str = Field(foreign_key="merchants.merchant_id", index=True)
     user_id: str = Field(foreign_key="users.user_id", index=True)
     role: MerchantUserRole = MerchantUserRole.OPERATOR
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)

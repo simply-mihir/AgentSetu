@@ -76,7 +76,11 @@ limiter = Limiter(key_func=get_remote_address, enabled=not _testing)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"AgentSetu API starting — mode={settings.app_mode} env={settings.environment}")
-    create_db_and_tables()
+    # N5 FIX: Skip create_all in production — trust Alembic exclusively
+    if not settings.is_production:
+        create_db_and_tables()
+    else:
+        logger.info("Production mode — skipping create_db_and_tables (use Alembic migrations)")
 
     if settings.is_production:
         issues = settings.validate_production()
@@ -262,10 +266,10 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 app.add_exception_handler(StarletteHTTPException, _http_exception_handler)
 app.add_exception_handler(RequestValidationError, _validation_exception_handler)
 
-# CORS — restricted to configured origins only (no wildcard in production)
+# N6 FIX: CORS — wildcard only in demo mode, never in sandbox/staging/production
 allowed_origins = settings.cors_origins_list
-if not settings.is_production:
-    allowed_origins.append("*")  # Allow all for local dev only
+if settings.is_demo:
+    allowed_origins.append("*")  # Allow all origins in demo mode only
 
 app.add_middleware(
     CORSMiddleware,

@@ -39,7 +39,7 @@ jobs:
           mypy . --ignore-missing-imports --exclude migrations --exclude venv --exclude .venv
 
   backend-test:
-    name: Backend — Tests (194)
+    name: Backend — Tests (217)
     runs-on: ubuntu-latest
     needs: backend-lint
     defaults:

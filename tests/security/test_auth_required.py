@@ -39,6 +39,26 @@ def _seed_transaction(session):
 class TestC1TransactionAuth:
     """Unauthenticated callers must be rejected by transaction endpoints."""
 
+    def test_intent_requires_auth(self, client):
+        """N1 FIX: /intent now requires authentication."""
+        r = client.post("/v1/transactions/intent", json={"message": "test"})
+        assert r.status_code in (401, 403), f"Expected 401/403, got {r.status_code}"
+
+    def test_select_requires_auth(self, client, session):
+        """N1 FIX: /select now requires authentication."""
+        txn_id = _seed_transaction(session)
+        r = client.post("/v1/transactions/select", json={
+            "transaction_id": txn_id, "product_id": "p1", "merchant_id": "m1",
+        })
+        assert r.status_code in (401, 403), f"Expected 401/403, got {r.status_code}"
+
+    def test_policy_evaluate_requires_auth(self, client):
+        """N2 FIX: /policy/evaluate now requires authentication."""
+        r = client.post("/v1/transactions/policy/evaluate", json={
+            "merchant_id": "m1", "product_id": "p1", "amount_inr": 100,
+        })
+        assert r.status_code in (401, 403), f"Expected 401/403, got {r.status_code}"
+
     def test_approve_requires_auth(self, client, session):
         txn_id = _seed_transaction(session)
         r = client.post("/v1/transactions/approve", json={"transaction_id": txn_id})

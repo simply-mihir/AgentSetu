@@ -11,6 +11,7 @@ All endpoints require authentication (C2 fix).
 import json
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
+from utils.time import utc_now
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -268,7 +269,7 @@ async def create_payment_link(
     if policy_result.decision == PolicyDecision.DENY:
         txn.state = TransactionState.CANCELLED
         txn.failure_reason = policy_result.message
-        txn.updated_at = datetime.utcnow()
+        txn.updated_at = utc_now()
         session.add(txn)
         session.commit()
         raise HTTPException(status_code=403, detail=make_error(
@@ -281,7 +282,7 @@ async def create_payment_link(
     # ── NEEDS APPROVAL ────────────────────────────────────────────────────────
     if policy_result.decision == PolicyDecision.NEEDS_APPROVAL:
         txn.state = TransactionState.PENDING_APPROVAL
-        txn.updated_at = datetime.utcnow()
+        txn.updated_at = utc_now()
         session.add(txn)
         session.commit()
         return {
@@ -331,7 +332,7 @@ async def create_payment_link(
     if not link_result.success:
         txn.state = TransactionState.PAYMENT_FAILED
         txn.failure_reason = f"Razorpay error: {link_result.error}"
-        txn.updated_at = datetime.utcnow()
+        txn.updated_at = utc_now()
         session.add(txn)
         audit_service.record(
             session=session,
@@ -356,7 +357,7 @@ async def create_payment_link(
     txn.razorpay_payment_link_id = link_result.payment_link_id
     txn.razorpay_payment_link_url = link_result.payment_link_url
     txn.state = TransactionState.PAYMENT_LINK_CREATED
-    txn.updated_at = datetime.utcnow()
+    txn.updated_at = utc_now()
     session.add(txn)
 
     audit_service.record(
@@ -393,7 +394,7 @@ async def create_payment_link(
             user_id=current_user.user_id,
             status_code=200,
             response_body=json.dumps(success_response),
-            expires_at=datetime.utcnow() + timedelta(hours=24),
+            expires_at=utc_now() + timedelta(hours=24),
         )
         session.add(record)
         session.commit()
@@ -443,7 +444,7 @@ async def verify_payment(
         result = "status_unknown"
 
     txn.state = new_state
-    txn.updated_at = datetime.utcnow()
+    txn.updated_at = utc_now()
     session.add(txn)
 
     audit_service.record(
@@ -686,7 +687,7 @@ async def cancel_payment(
 
     txn.state = TransactionState.CANCELLED
     txn.failure_reason = "cancelled_by_user"
-    txn.updated_at = datetime.utcnow()
+    txn.updated_at = utc_now()
     session.add(txn)
 
     # Revoke any outstanding capabilities

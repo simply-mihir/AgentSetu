@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../services/api")
 
 import pytest
 from datetime import datetime, timedelta
+from utils.time import utc_now
 from capability.service import capability_service
 from models.capability import AuthorizationCapability, CapabilityStatus
 
@@ -89,7 +90,7 @@ class TestExpiredCapabilityConsume:
         )
         # Force expiry
         refreshed = session.get(AuthorizationCapability, cap.id)
-        refreshed.expires_at = datetime.utcnow() - timedelta(seconds=1)
+        refreshed.expires_at = utc_now() - timedelta(seconds=1)
         session.add(refreshed)
         session.commit()
 

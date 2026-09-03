@@ -17,6 +17,7 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Any, Optional
+from utils.time import utc_now
 
 from sqlmodel import Session, select
 
@@ -336,7 +337,7 @@ async def _select_product(
     txn.merchant_name = merchant.name
     txn.amount_inr = product.price_inr
     txn.state = TransactionState.PENDING_APPROVAL
-    txn.updated_at = datetime.utcnow()
+    txn.updated_at = utc_now()
     session.add(txn)
     session.commit()
     session.refresh(txn)
@@ -414,7 +415,7 @@ async def _approve_transaction(
     approval_id = f"appr_{uuid.uuid4().hex[:8]}"
     txn.approval_id = approval_id
     txn.approved_by = user.user_id  # ALWAYS from auth context
-    txn.approved_at = datetime.utcnow()
+    txn.approved_at = utc_now()
     txn.state = TransactionState.APPROVED
     if not txn.buyer_id:
         txn.buyer_id = user.user_id
@@ -422,7 +423,7 @@ async def _approve_transaction(
         txn.fingerprint = _make_fingerprint(
             txn.merchant_id, txn.product_id, txn.amount_inr, approval_id,
         )
-    txn.updated_at = datetime.utcnow()
+    txn.updated_at = utc_now()
     session.add(txn)
     session.commit()
     session.refresh(txn)

@@ -157,7 +157,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(authUser)
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // N12 FIX: Call backend to revoke JTI before clearing local state
+    try {
+      await api.post('/auth/logout')
+    } catch {
+      // Best-effort — clear local state even if backend call fails
+    }
     clearAuth()
     setUser(null)
     setToken(null)

@@ -31,6 +31,9 @@ openai==1.54.0
 # Rate limiting
 slowapi==0.1.9
 
+# Redis (JTI revocation, caching)
+redis==8.1.0
+
 # Utilities
 python-dotenv==1.0.1
 cryptography==43.0.3

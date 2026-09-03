@@ -8,6 +8,7 @@ from typing import Optional
 from datetime import datetime
 from enum import Enum
 import uuid
+from utils.time import utc_now
 
 
 class CapabilityStatus(str, Enum):
@@ -49,4 +50,4 @@ class AuthorizationCapability(SQLModel, table=True):
     revoked_at: Optional[datetime] = None
     revoke_reason: Optional[str] = None
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)

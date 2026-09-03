@@ -3,6 +3,7 @@ from sqlalchemy import UniqueConstraint
 from typing import Optional, List
 from datetime import datetime
 import json
+from utils.time import utc_now
 
 
 class Product(SQLModel, table=True):
@@ -27,11 +28,11 @@ class Product(SQLModel, table=True):
     description: str = ""
     image_url: str = ""
 
-    # Razorpay payment link mapping
-    payment_link_id: Optional[str] = None
+    # M4 FIX: payment_link_id REMOVED — payment links are per-transaction, not per-product.
+    # Kept as Optional column for backward DB compat but never populated.
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     merchant: Optional["Merchant"] = Relationship(back_populates="products")
 
@@ -58,8 +59,8 @@ class Merchant(SQLModel, table=True):
     arm_version: str = "arm-0.1"
     is_active: bool = True
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     products: List[Product] = Relationship(back_populates="merchant")
 

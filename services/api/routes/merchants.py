@@ -9,6 +9,7 @@ SECURITY:
 import json
 from datetime import datetime
 from typing import List, Optional
+from utils.time import utc_now
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from pydantic import BaseModel
@@ -95,7 +96,7 @@ async def import_merchant(
     merchant.max_autonomous_spend_inr = request.max_autonomous_spend_inr
     merchant.approval_threshold_inr = request.approval_threshold_inr
     merchant.restricted_categories = json.dumps(request.restricted_categories)
-    merchant.updated_at = datetime.utcnow()
+    merchant.updated_at = utc_now()
 
     session.add(merchant)
     session.commit()
@@ -154,8 +155,8 @@ async def import_merchant(
             existing.merchant_rating = float(p_data.get("merchant_rating", 4.0))
             existing.description = p_data.get("description", "")
             existing.image_url = p_data.get("image_url", "")
-            existing.payment_link_id = p_data.get("payment_link_id")
-            existing.updated_at = datetime.utcnow()
+            # M4 FIX: payment_link_id removed — payment links are per-transaction, not per-product
+            existing.updated_at = utc_now()
 
             session.add(existing)
             imported.append(p_data["product_id"])
@@ -298,7 +299,7 @@ async def update_policy(
     merchant.approval_threshold_inr = request.approval_threshold_inr
     merchant.set_restricted_categories(request.restricted_categories)
     merchant.refund_authority = request.refund_authority
-    merchant.updated_at = datetime.utcnow()
+    merchant.updated_at = utc_now()
 
     session.add(merchant)
     session.commit()

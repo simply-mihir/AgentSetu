@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import datetime
 from enum import Enum
 import uuid
+from utils.time import utc_now
 
 
 class TransactionState(str, Enum):
@@ -132,5 +133,5 @@ class Transaction(SQLModel, table=True):
     recovery_action: Optional[str] = None
     failure_reason: Optional[str] = None
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)

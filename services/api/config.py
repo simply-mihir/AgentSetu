@@ -26,11 +26,13 @@ class Settings(BaseSettings):
     razorpay_key_secret: str = "demo_secret"
     razorpay_webhook_secret: str = "demo_webhook"
     razorpay_webhook_base_url: str = ""     # Phase 8: separate URL for webhooks (public-facing)
+    razorpay_payment_callback_url: str = ""  # M9: browser redirect after payment (frontend URL)
     razorpay_oauth_client_id: str = ""
     razorpay_oauth_client_secret: str = ""
 
-    # ── OpenAI ───────────────────────────────────────────────────────────────
+    # ── LLM (OpenAI-compatible: OpenAI, Groq, Together, etc.) ───────────────
     openai_api_key: str = "sk-demo"
+    openai_base_url: str = ""         # Empty = OpenAI default. Groq: https://api.groq.com/openai/v1
     openai_model: str = "gpt-4o-mini"
 
     # ── Encryption (for stored tokens) ───────────────────────────────────────
@@ -69,7 +71,17 @@ class Settings(BaseSettings):
 
     @property
     def razorpay_callback_url(self) -> str:
-        """Phase 8: Use dedicated webhook URL if set, else fall back to base_url."""
+        """M9 FIX: callback_url = browser redirect for buyer AFTER payment (frontend page).
+        This is NOT the webhook endpoint — webhooks are configured in the Razorpay Dashboard."""
+        if self.razorpay_payment_callback_url:
+            return self.razorpay_payment_callback_url
+        # Default: frontend callback page
+        frontend = self.cors_origins_list[0] if self.cors_origins_list else "http://localhost:3000"
+        return f"{frontend}/payment/callback"
+
+    @property
+    def razorpay_webhook_url(self) -> str:
+        """The server-side webhook endpoint URL (for Razorpay Dashboard configuration)."""
         base = self.razorpay_webhook_base_url or self.base_url
         return f"{base}/v1/webhooks/razorpay"
 
@@ -87,8 +99,9 @@ class Settings(BaseSettings):
         issues = []
         if not self.secret_key:
             issues.append("SECRET_KEY not set")
-        if not self.encryption_key:
-            issues.append("ENCRYPTION_KEY not set")
+        # L9 FIX: encryption_key is reserved for future use (stored token encryption).
+        # Don't fail production validation for an unused feature.
+        # Re-enable when an encryption consumer is added.
         if self.razorpay_key_id == "rzp_test_demo":
             issues.append("RAZORPAY_KEY_ID is still demo value")
         if self.openai_api_key == "sk-demo":

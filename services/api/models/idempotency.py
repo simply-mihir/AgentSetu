@@ -3,6 +3,7 @@ from sqlmodel import SQLModel, Field
 from sqlalchemy import UniqueConstraint
 from typing import Optional
 from datetime import datetime
+from utils.time import utc_now
 
 
 class IdempotencyRecord(SQLModel, table=True):
@@ -17,7 +18,7 @@ class IdempotencyRecord(SQLModel, table=True):
     user_id: str                           # scoped per user
     status_code: int = 200
     response_body: str = ""                # JSON-serialized response
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
     # Auto-expire after 24h for cleanup (enforced in query, not TTL)
     expires_at: Optional[datetime] = None

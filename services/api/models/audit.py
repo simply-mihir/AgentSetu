@@ -2,6 +2,7 @@ from sqlmodel import SQLModel, Field
 from typing import Optional
 from datetime import datetime
 import uuid
+from utils.time import utc_now
 
 
 class AuditEvent(SQLModel, table=True):
@@ -15,7 +16,7 @@ class AuditEvent(SQLModel, table=True):
     )
     transaction_id: str = Field(index=True)
     correlation_id: str = Field(index=True)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
 
     actor: str = Field(index=True)  # agentsetu | buyer | merchant | razorpay
     event_type: str = Field(index=True)  # intent.received | catalog.discovered | etc.
