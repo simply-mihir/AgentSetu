@@ -360,6 +360,7 @@ async def create_payment_link(
     txn.updated_at = utc_now()
     session.add(txn)
 
+    # L2 FIX: flush_only — single commit at the end of the payment transaction
     audit_service.record(
         session=session,
         transaction_id=txn.transaction_id,
@@ -371,6 +372,7 @@ async def create_payment_link(
         payment_reference=link_result.payment_link_id,
         next_state="PAYMENT_LINK_CREATED",
         result="payment_link_created",
+        flush_only=True,
     )
 
     session.commit()

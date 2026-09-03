@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-03  
 **Baseline audit:** `docs/IMPLEMENTATION_AUDIT.md` (2026-09-01, 41 tests)  
-**Current baseline:** 217 tests, all passing · Frontend builds clean (11 routes) · Python 3.12  
+**Current baseline:** 240 tests, all passing · Frontend builds clean (11 routes) · Python 3.12  
 **Scope:** Full repository audit comparing the original audit findings against current implementation, plus new gap analysis.
 
 ---
@@ -76,13 +76,13 @@ Risk labels: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low
 | ID | Finding | Status | Evidence |
 |---|---|---|---|
 | L1 | Write-only ARM cache | ✅ FIXED | `arm/generator.py:80-91` — L1 FIX: TTL-based caching with `ARM_CACHE_TTL_SECONDS=300`. Cached ARM returned if generated within 5 minutes. Content hash compared to avoid unnecessary DB writes. `force_refresh` parameter available. |
-| L2 | Per-event audit commits under load | ❌ OPEN | `audit/service.py` — each `record()` call does `session.commit()`. No flush-mode option. |
+| L2 | Per-event audit commits under load | ✅ FIXED | `audit/service.py` — `flush_only: bool = False` parameter added to `record()`. When True, calls `session.flush()` instead of `session.commit()`, letting the caller's transaction handle the commit. Used in `routes/payments.py` and `routes/webhooks.py` for transactional consistency. |
 | L3 | No connection pool tuning for PostgreSQL | ✅ FIXED | `database.py:28-31` — `pool_size=10, max_overflow=20, pool_timeout=30, pool_recycle=1800`. |
 | L4 | Dead `or is_approved` branch in policy engine step 6 | ✅ FIXED | `policy/engine.py:152` — L4 FIX: Removed dead `or is_approved` branch. Now `if amount_inr <= approval_threshold:` only. Comment documents the fix. |
 | L5 | Audit routes: no index on `event_type`, `actor` | ✅ FIXED | `models/audit.py:21-22` — `actor: str = Field(index=True)` and `event_type: str = Field(index=True)`. Also `transaction_id` and `correlation_id` indexed. |
 | L6 | `revoke_capability` not idempotent | ✅ FIXED | `capability/service.py:213-214` — L6 FIX: Returns `True` for already-terminal states (CONSUMED, REVOKED, EXPIRED). Idempotent — revoking an already-revoked capability is a success. |
 | L7 | No token revocation / logout | ✅ FIXED | `routes/auth.py:34-35` — `_revoked_jtis` set. `is_token_revoked()` function. Logout at line 166 adds JTI to set. JTI generated at signup/login and included in JWT. |
-| L8 | No refresh token flow | ❌ OPEN | No refresh token endpoint exists. |
+| L8 | No refresh token flow | ✅ FIXED | `models/refresh_token.py` — RefreshToken model with family_id for rotation chains. `auth/jwt.py` — `generate_refresh_token()` + `hash_refresh_token()`. `routes/auth.py` — `POST /auth/refresh` with family-based compromise detection: replay of a revoked token revokes entire family. Login/signup return refresh_token. Logout revokes all. Frontend `auth.tsx` — silent 401→refresh→retry with queuing. Migration `a3f1b7c92d4e`. 11 tests. |
 | L9 | `ENCRYPTION_KEY` validated but never used | ✅ FIXED | `config.py:102-104` — L9 FIX: Dead validation removed. Comment documents it's reserved for future use (stored token encryption). No production failure for unused feature. |
 | L10 | No Docker build in CI | ✅ FIXED | `.github/workflows/ci.yml:134-160` — Docker build + verification step: builds image, runs container, curls `/health` endpoint, verifies `"status":"ok"` response. |
 
@@ -109,7 +109,7 @@ Risk labels: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low
 | N8 | Frontend stores JWT in localStorage (XSS risk) | `apps/web/lib/auth.tsx:47` | ⚠️ ACCEPTED | Known tradeoff for demo/prototype. `httpOnly` cookie would be more secure for production. |
 | N9 | `datetime.utcnow()` deprecated — 40+ deprecation warnings | `utils/time.py` | ✅ FIXED | Created `utc_now()` helper. Replaced across 15 files. Warnings dropped from ~907 to 63 (all third-party). |
 | N10 | WhatsApp adapter not implemented | N/A | ❌ DEFERRED | Requires Meta Business API credentials. Channel framework ready. |
-| N11 | No merchant analytics / AI visibility score | N/A | ❌ DEFERRED | Data collection in place via audit trail; visualization deferred. |
+| N11 | No merchant analytics / AI visibility score | `routes/analytics.py`, `services/visibility_score.py` | ✅ FIXED | Deterministic visibility score (0–100) with 5 weighted signals: catalog completeness, policy quality, transaction health, ARM freshness, account standing. Transparent `ScoreBreakdown` with improvement tips. 3 analytics endpoints: overview (stats + score), visibility (score + tips), transaction breakdown. Auth-gated — identity from auth context. 12 tests. |
 
 ### 🔵 Low — New
 
@@ -179,10 +179,10 @@ Risk labels: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low
 
 | Suite | Count | Coverage |
 |---|---|---|
-| Unit tests | ~180 | Policy engine, scoring, state machine, capability (+ hardened), idempotency, RBAC, error codes, ARM protocol (+ cache), MCP adapter, buyer policy, API hardening, AI security, webhook reliability, commerce receipt, discovery performance, config safety, JTI revocation |
+| Unit tests | ~203 | Policy engine, scoring, state machine, capability (+ hardened), idempotency, RBAC, error codes, ARM protocol (+ cache), MCP adapter, buyer policy, API hardening, AI security, webhook reliability, commerce receipt, discovery performance, config safety, JTI revocation, refresh tokens, analytics & visibility score |
 | Integration tests | ~14 | Full purchase flow end-to-end (auto-approve + needs-approval paths) |
 | Security tests | ~23 | Cross-tenant RBAC, webhook replay, signature validation, auth required (6 endpoints), tenant isolation |
-| **Total** | **217** | All passing · 63 warnings (third-party only) |
+| **Total** | **240** | All passing · 69 warnings (third-party only) |
 
 ---
 
@@ -194,9 +194,6 @@ The following items are intentionally deferred (not blockers for the current del
 |---|---|---|
 | M10 | Email verification flow | Requires email provider integration — deferred to deployment phase |
 | N10 | WhatsApp adapter | Requires Meta Business API credentials |
-| N11 | Merchant analytics / AI visibility score | Data collection in place via audit trail; visualization deferred |
-| L8 | Refresh token flow | 24h JWT TTL sufficient for demo/buildathon |
-| L2 | Per-event audit commits | Performance concern at scale; acceptable for current throughput |
 | N8 | JWT in localStorage | Known XSS tradeoff; httpOnly cookies for production |
 
 ---
@@ -210,45 +207,48 @@ The following items are intentionally deferred (not blockers for the current del
 | 🔴 Critical | 6 | 6 | 0 | 0 |
 | 🟠 High | 8 | 8 | 0 | 0 |
 | 🟡 Medium | 10 | 9 | 0 | 1 (M10: email verification — deferred) |
-| 🔵 Low | 6 | 5 | 0 | 1 (L8: refresh tokens — deferred) |
-| **Total** | **30** | **28** | **0** | **2** |
+| 🔵 Low | 6 | 6 | 0 | 0 |
+| **Total** | **30** | **29** | **0** | **1** |
 
 ### New findings: 13 → all resolved
 
 | Severity | Total | Fixed | Accepted/Deferred |
 |---|---|---|---|
 | 🟠 High | 6 | 6 | 0 |
-| 🟡 Medium | 5 | 3 | 2 (N8: accepted tradeoff, N10/N11: deferred) |
+| 🟡 Medium | 5 | 4 | 1 (N8: accepted tradeoff, N10: deferred) |
 | 🔵 Low | 2 | 2 | 0 |
 
 ### Test Suite Progress
 
 | Metric | Original Audit | Current |
 |---|---|---|
-| Total tests | 41 | 217 |
-| Passing | 41 | 217 |
+| Total tests | 41 | 240 |
+| Passing | 41 | 240 |
 | Failing | 0 | 0 |
-| Test files | ~6 | 21 |
-| Warnings | ~907 | 63 (all third-party) |
+| Test files | ~6 | 23 |
+| Warnings | ~907 | 69 (all third-party) |
 
 ### Key Accomplishments Since Original Audit
 
 1. **All 6 critical findings resolved** — authentication enforced on all sensitive endpoints
 2. **All 8 high findings resolved** — including discovery performance (H6), login rate limiting (H7)
-3. **28 of 30 original findings resolved** — only M10 (email) and L8 (refresh tokens) deferred
-4. **All 13 new findings addressed** — 11 fixed, 2 accepted as known tradeoffs
+3. **29 of 30 original findings resolved** — only M10 (email verification) deferred
+4. **All 13 new findings addressed** — 12 fixed, 1 accepted as known tradeoff
 5. **Frontend auth system built** — login/signup UI, token management, route guards, 401 handling
 6. **Buyer policy enforcement** — blocked merchants, blocked categories, daily spending limits
 7. **Capability concurrency fixed** — SELECT FOR UPDATE prevents double-consume race
 8. **Redis-backed JTI revocation** — with in-memory fallback for dev
 9. **Prompt injection defense** — input delimiters, output sanitization, allowed-key whitelist
 10. **ARM TTL-based caching** — 5-minute cache with content hash comparison
-11. **Test suite 5.3× growth** — from 41 to 217 tests covering unit, integration, security
-12. **Connection pool tuning** — PostgreSQL pool_size=10, max_overflow=20
-13. **Full CI/CD pipeline** — lint, type check, tests, dep audit, migration check, Docker build, frontend build
+11. **Refresh token rotation** — family-based compromise detection, silent 401→refresh on frontend
+12. **Merchant analytics** — deterministic visibility score (0–100), transaction stats, improvement tips
+13. **Audit batch commits** — `flush_only` parameter for transactional audit writes
+14. **Test suite 5.9× growth** — from 41 to 240 tests covering unit, integration, security
+15. **Connection pool tuning** — PostgreSQL pool_size=10, max_overflow=20
+16. **Full CI/CD pipeline** — lint, type check, tests, dep audit, migration check, Docker build, frontend build
 
 ---
 
-*This audit was updated after the full hardening pass.*  
-*All 217 tests confirmed passing: `pytest ../../tests/ -q → 217 passed, 0 failed`.*  
+*This audit was updated after the deferred-task implementation pass.*  
+*All 240 tests confirmed passing: `pytest ../../tests/ -q → 240 passed, 0 failed`.*  
 *Frontend build confirmed clean: `npm run build → 11 routes, no errors`.*

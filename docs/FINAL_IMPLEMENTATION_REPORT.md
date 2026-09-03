@@ -3,7 +3,7 @@
 **Date:** 2026-09-03  
 **Project:** AgentSetu — The Authorization & Interoperability Layer for AI-Native Agentic Commerce  
 **Stack:** FastAPI + SQLModel + Alembic (API) · Next.js 14 + Tailwind (Web) · Neon PostgreSQL · Upstash Redis · Groq LLM · Razorpay  
-**Test suite:** 217 tests passing · 0 failures · 63 warnings (all third-party)  
+**Test suite:** 240 tests passing · 0 failures · 69 warnings (all third-party)  
 **Frontend:** Builds clean · 11 routes · Static pre-rendered  
 
 ---
@@ -146,7 +146,7 @@ Buyer Agent → MCP/REST API → AI Orchestrator (intent parsing only)
 
 ---
 
-## 5. Test Suite — 217 Tests
+## 5. Test Suite — 240 Tests
 
 | Category | Count | Coverage |
 |---|---|---|
@@ -168,6 +168,8 @@ Buyer Agent → MCP/REST API → AI Orchestrator (intent parsing only)
 | **Discovery Perf** | 4 | Pagination, rate limiting, filtering |
 | **Config Safety** | 10 | Callback vs webhook URL, live key guard, production validation |
 | **JTI Revocation** | 3 | Revoke/check, unknown JTI, multiple revocations |
+| **Refresh Tokens** | 11 | Token generation, rotation, replay/family revocation, expiry, logout |
+| **Analytics & Visibility** | 12 | Visibility score (5 signals), analytics endpoints, auth gating |
 | **Scoring** | 8 | Deterministic scoring, weight factors |
 | **Cross-Tenant** | 6 | Merchant isolation, transaction isolation |
 
@@ -207,18 +209,31 @@ PYTHONPATH=$(pwd) python -m pytest ../../tests/unit/test_policy_engine.py -v
 | `services/api/arm/schema.py` | N9: `utc_now()` |
 | `services/api/models/*.py` (8 files) | N9: `utc_now()` in all model default_factories |
 | `apps/web/lib/auth.tsx` | N12: frontend logout calls backend |
-| `.github/workflows/ci.yml` | Updated test count to 217 |
+| `services/api/auth/jwt.py` | L8: refresh token helpers (generate, hash) |
+| `services/api/routes/auth.py` | L8: refresh endpoint, login/signup return refresh token, logout revokes all |
+| `apps/web/lib/auth.tsx` | L8: silent 401→refresh→retry with request queuing, N12: logout calls backend |
+| `services/api/routes/analytics.py` | N11: analytics endpoints (overview, visibility, breakdown) |
+| `services/api/services/visibility_score.py` | N11: deterministic visibility score (0–100) |
+| `services/api/routes/__init__.py` | Registered analytics router |
+| `services/api/audit/service.py` | L2: flush_only parameter for transactional writes |
+| `.github/workflows/ci.yml` | Updated test count to 240 |
 
-### Created Files (6)
+### Created Files (12)
 
 | File | Purpose |
 |---|---|
 | `services/api/utils/time.py` | `utc_now()` helper replacing deprecated `datetime.utcnow()` |
 | `services/api/utils/__init__.py` | Package init |
 | `services/api/auth/revocation.py` | Redis-backed JTI revocation with in-memory fallback |
+| `services/api/models/refresh_token.py` | L8: RefreshToken model with family-based rotation |
+| `services/api/services/visibility_score.py` | N11: Deterministic visibility score (5 weighted signals) |
+| `services/api/routes/analytics.py` | N11: Analytics endpoints (3 endpoints, auth-gated) |
+| `services/api/migrations/versions/a3f1b7c92d4e_add_refresh_tokens_table.py` | L8: refresh_tokens table migration |
 | `tests/unit/test_arm_cache.py` | ARM cache TTL tests (5 tests) |
 | `tests/unit/test_config_safety.py` | Config safety tests — M9, M6, L9, N5, N6 (10 tests) |
 | `tests/unit/test_jti_revocation.py` | JTI revocation fallback tests (3 tests) |
+| `tests/unit/test_refresh_tokens.py` | L8: Refresh token rotation tests (11 tests) |
+| `tests/unit/test_analytics.py` | N11: Analytics & visibility score tests (12 tests) |
 
 ---
 
@@ -293,9 +308,8 @@ All constraints from the project owner are verified in code:
 2. **In-memory JTI fallback**: Without Redis, JTI revocation doesn't persist across process restarts
 3. **No email verification**: Auth works but email isn't verified
 4. **Single-merchant Razorpay**: Test keys support one merchant; production needs OAuth for multi-merchant
-5. **No refresh tokens**: 24h JWT TTL; production should add refresh token rotation
 
 ---
 
 *Generated as part of the AgentSetu implementation audit and hardening pass.*
-*217 tests passing · All security constraints verified · Frontend builds clean*
+*240 tests passing · All security constraints verified · Frontend builds clean*

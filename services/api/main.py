@@ -168,6 +168,7 @@ _openapi_tags = [
     {"name": "Webhooks", "description": "Payment provider webhook handlers (Razorpay)"},
     {"name": "Health", "description": "Liveness and readiness probes"},
     {"name": "MCP", "description": "Model Context Protocol — tool definitions for AI agent integration"},
+    {"name": "Analytics", "description": "Merchant analytics — transaction stats, visibility score, and insights"},
 ]
 
 app = FastAPI(

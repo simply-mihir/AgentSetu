@@ -28,7 +28,15 @@ class AuditService:
         result: Optional[str] = None,
         error_code: Optional[str] = None,
         metadata: dict = None,
+        flush_only: bool = False,
     ) -> AuditEvent:
+        """Record an audit event.
+
+        L2 FIX: When flush_only=True, the event is flushed to the DB but not
+        committed — the caller's enclosing transaction handles the commit.
+        Use this inside payment/webhook handlers that already commit at the end.
+        Default (flush_only=False) commits immediately for standalone audit events.
+        """
         event = AuditEvent(
             transaction_id=transaction_id,
             correlation_id=correlation_id,
@@ -45,8 +53,11 @@ class AuditService:
             metadata_json=json.dumps(metadata or {}),
         )
         session.add(event)
-        session.commit()
-        session.refresh(event)
+        if flush_only:
+            session.flush()
+        else:
+            session.commit()
+            session.refresh(event)
         logger.info(
             f"AUDIT [{event.event_id}] {event_type} | txn={transaction_id} | "
             f"actor={actor} | decision={decision} | result={result}"

@@ -140,6 +140,7 @@ async def razorpay_webhook(request: Request, session: Session = Depends(get_sess
     txn.updated_at = utc_now()
     session.add(txn)
 
+    # L2 FIX: flush_only — webhook handler commits once at the end
     audit_service.record(
         session=session,
         transaction_id=txn.transaction_id,
@@ -150,6 +151,7 @@ async def razorpay_webhook(request: Request, session: Session = Depends(get_sess
         payment_reference=payment_link_id,
         result=result,
         next_state=new_state,
+        flush_only=True,
     )
 
     if new_state == TransactionState.PAYMENT_SUCCESS:
@@ -163,6 +165,7 @@ async def razorpay_webhook(request: Request, session: Session = Depends(get_sess
             event_type="receipt.issued",
             result="receipt_generated",
             next_state="RECEIPT_ISSUED",
+            flush_only=True,
         )
 
     wh_event.transaction_id = txn.transaction_id

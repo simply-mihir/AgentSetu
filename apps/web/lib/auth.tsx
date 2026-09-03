@@ -40,29 +40,35 @@ export const useAuth = () => useContext(AuthContext)
 // ── Storage helpers (never expose token to server components) ────────────────
 
 const TOKEN_KEY = 'agentsetu_token'
+const REFRESH_KEY = 'agentsetu_refresh'
 const USER_KEY = 'agentsetu_user'
 
-function saveAuth(token: string, user: AuthUser) {
+function saveAuth(token: string, user: AuthUser, refreshToken?: string) {
   try {
     localStorage.setItem(TOKEN_KEY, token)
     localStorage.setItem(USER_KEY, JSON.stringify(user))
+    if (refreshToken) {
+      localStorage.setItem(REFRESH_KEY, refreshToken)
+    }
   } catch {}
 }
 
-function loadAuth(): { token: string | null; user: AuthUser | null } {
+function loadAuth(): { token: string | null; user: AuthUser | null; refreshToken: string | null } {
   try {
     const token = localStorage.getItem(TOKEN_KEY)
     const raw = localStorage.getItem(USER_KEY)
     const user = raw ? JSON.parse(raw) : null
-    return { token, user }
+    const refreshToken = localStorage.getItem(REFRESH_KEY)
+    return { token, user, refreshToken }
   } catch {
-    return { token: null, user: null }
+    return { token: null, user: null, refreshToken: null }
   }
 }
 
 function clearAuth() {
   try {
     localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(REFRESH_KEY)
     localStorage.removeItem(USER_KEY)
   } catch {}
 }
@@ -100,18 +106,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => api.interceptors.request.eject(interceptor)
   }, [])
 
-  // Handle 401 responses — clear auth and redirect to login
+  // L8: Handle 401 responses — attempt silent refresh, then redirect on failure
   useEffect(() => {
+    let isRefreshing = false
+    let failedQueue: Array<{ resolve: (v: unknown) => void; reject: (e: unknown) => void; config: any }> = []
+
+    const processQueue = (error: unknown, token: string | null = null) => {
+      failedQueue.forEach(({ resolve, reject, config }) => {
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`
+          resolve(api(config))
+        } else {
+          reject(error)
+        }
+      })
+      failedQueue = []
+    }
+
     const interceptor = api.interceptors.response.use(
       (response) => response,
-      (error) => {
-        if (error.response?.status === 401 && !error.config?.url?.includes('/auth/')) {
-          clearAuth()
-          setUser(null)
-          setToken(null)
-          router.push('/auth?expired=1')
+      async (error) => {
+        const origConfig = error.config
+        if (error.response?.status !== 401 || origConfig?.url?.includes('/auth/') || origConfig?._retry) {
+          return Promise.reject(error)
         }
-        return Promise.reject(error)
+
+        // Try silent refresh
+        const stored = loadAuth()
+        if (!stored.refreshToken) {
+          clearAuth(); setUser(null); setToken(null)
+          router.push('/auth?expired=1')
+          return Promise.reject(error)
+        }
+
+        if (isRefreshing) {
+          // Queue this request while refresh is in progress
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject, config: origConfig })
+          })
+        }
+
+        isRefreshing = true
+        origConfig._retry = true
+
+        try {
+          const resp = await api.post('/auth/refresh', { refresh_token: stored.refreshToken })
+          const { access_token, refresh_token: newRefresh, user_id, role, display_name } = resp.data
+          const authUser: AuthUser = { user_id, email: stored.user?.email || '', role, display_name }
+          saveAuth(access_token, authUser, newRefresh)
+          setToken(access_token)
+          setUser(authUser)
+          origConfig.headers.Authorization = `Bearer ${access_token}`
+          processQueue(null, access_token)
+          return api(origConfig)
+        } catch {
+          processQueue(error, null)
+          clearAuth(); setUser(null); setToken(null)
+          router.push('/auth?expired=1')
+          return Promise.reject(error)
+        } finally {
+          isRefreshing = false
+        }
       }
     )
     return () => api.interceptors.response.eject(interceptor)
@@ -136,9 +191,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const resp = await api.post('/auth/login', { email, password })
-    const { access_token, user_id, role, display_name } = resp.data
+    const { access_token, refresh_token: rt, user_id, role, display_name } = resp.data
     const authUser: AuthUser = { user_id, email, role, display_name }
-    saveAuth(access_token, authUser)
+    saveAuth(access_token, authUser, rt)
     setToken(access_token)
     setUser(authUser)
   }, [])
@@ -150,9 +205,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       display_name: displayName || email.split('@')[0],
     })
-    const { access_token, user_id, role: userRole, display_name } = resp.data
+    const { access_token, refresh_token: rt, user_id, role: userRole, display_name } = resp.data
     const authUser: AuthUser = { user_id, email, role: userRole, display_name }
-    saveAuth(access_token, authUser)
+    saveAuth(access_token, authUser, rt)
     setToken(access_token)
     setUser(authUser)
   }, [])
