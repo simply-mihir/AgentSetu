@@ -27,7 +27,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Upgrade schema."""
     conn = op.get_bind()
-    
+
     if conn.dialect.name == 'sqlite':
         with op.batch_alter_table('merchant_users') as batch_op:
             batch_op.create_unique_constraint('uq_merchant_user', ['merchant_id', 'user_id'])
