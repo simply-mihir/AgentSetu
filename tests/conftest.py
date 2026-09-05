@@ -5,7 +5,10 @@ shares the same in-memory store — avoids cross-test table-not-found errors
 that occur with file-based SQLite when the pool recycles connections after
 drop_all/create_all cycles.
 """
+import sys
 import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../services/api')))
+
 os.environ["DATABASE_URL"] = "sqlite://"       # in-memory, overridden by StaticPool engine
 os.environ["APP_MODE"] = "demo"
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-prod"

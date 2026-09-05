@@ -26,14 +26,23 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Unique constraints
-    op.create_unique_constraint('uq_merchant_user', 'merchant_users', ['merchant_id', 'user_id'])
-    op.create_unique_constraint('uq_product_merchant', 'products', ['product_id', 'merchant_id'])
-    op.create_unique_constraint('uq_webhook_provider_event', 'webhook_events', ['provider', 'provider_event_id'])
+    conn = op.get_bind()
+    
+    if conn.dialect.name == 'sqlite':
+        with op.batch_alter_table('merchant_users') as batch_op:
+            batch_op.create_unique_constraint('uq_merchant_user', ['merchant_id', 'user_id'])
+        with op.batch_alter_table('products') as batch_op:
+            batch_op.create_unique_constraint('uq_product_merchant', ['product_id', 'merchant_id'])
+        with op.batch_alter_table('webhook_events') as batch_op:
+            batch_op.create_unique_constraint('uq_webhook_provider_event', ['provider', 'provider_event_id'])
+    else:
+        # Unique constraints
+        op.create_unique_constraint('uq_merchant_user', 'merchant_users', ['merchant_id', 'user_id'])
+        op.create_unique_constraint('uq_product_merchant', 'products', ['product_id', 'merchant_id'])
+        op.create_unique_constraint('uq_webhook_provider_event', 'webhook_events', ['provider', 'provider_event_id'])
 
     # buyer_id column on transactions — may already exist from Phase 1 code change;
     # use batch_alter_table for SQLite compatibility.
-    conn = op.get_bind()
     inspector = sa.inspect(conn)
     existing_cols = {c['name'] for c in inspector.get_columns('transactions')}
 
