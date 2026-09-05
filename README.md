@@ -149,7 +149,7 @@ flowchart TD
     Test --> D{All Passed?}
     D -->|Yes| Deploy[Docker Build & Push]
     D -->|No| Notify[Notify Developer]
-    Deploy --> E[Deploy to Staging (Render / Supabase)]
+    Deploy --> E["Deploy to Staging (Render / Supabase)"]
 ```
 
 ---
