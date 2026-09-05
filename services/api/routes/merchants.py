@@ -214,10 +214,6 @@ async def list_merchants(
             "category": m.category,
             "is_active": m.is_active,
             "product_count": product_count,
-            "max_autonomous_spend_inr": m.max_autonomous_spend_inr,
-            "approval_threshold_inr": m.approval_threshold_inr,
-            "restricted_categories": m.get_restricted_categories(),
-            "refund_authority": m.refund_authority,
         })
     return {
         "merchants": result,
