@@ -29,11 +29,11 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     if conn.dialect.name == 'sqlite':
-        with op.batch_alter_table('merchant_users') as batch_op:
+        with op.batch_alter_table('merchant_users', reflect_kwargs={'resolve_fks': False}) as batch_op:
             batch_op.create_unique_constraint('uq_merchant_user', ['merchant_id', 'user_id'])
-        with op.batch_alter_table('products') as batch_op:
+        with op.batch_alter_table('products', reflect_kwargs={'resolve_fks': False}) as batch_op:
             batch_op.create_unique_constraint('uq_product_merchant', ['product_id', 'merchant_id'])
-        with op.batch_alter_table('webhook_events') as batch_op:
+        with op.batch_alter_table('webhook_events', reflect_kwargs={'resolve_fks': False}) as batch_op:
             batch_op.create_unique_constraint('uq_webhook_provider_event', ['provider', 'provider_event_id'])
     else:
         # Unique constraints
