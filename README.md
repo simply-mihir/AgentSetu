@@ -77,12 +77,12 @@ Designed for hackathon prototypes **and** production‑grade deployments, AgentS
 ```mermaid
 graph TD
     subgraph Client
-        UI[Web / Mobile UI]
-        SDK[SDK (Python/JS)]
+        UI["Web / Mobile UI"]
+        SDK["SDK (Python/JS)"]
     end
     subgraph API[FastAPI Service]
         Auth[Auth Middleware]
-        Router[Router & Endpoints]
+        Router["Router & Endpoints"]
         Policy[Policy Engine]
         Capability[Capability Service]
         ARM[ARM Generator]
