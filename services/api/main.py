@@ -5,12 +5,18 @@ import json
 import logging
 import uuid
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+import os as _os
+import time as _time
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from config import settings
 from database import create_db_and_tables, engine
@@ -67,8 +73,6 @@ if settings.sentry_dsn:
         logger.warning("sentry_dsn set but sentry-sdk not installed — skipping")
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
-import os as _os  # noqa: E402
-
 _testing = _os.environ.get("TESTING", "").lower() in ("1", "true")
 limiter = Limiter(key_func=get_remote_address, enabled=not _testing)
 
@@ -101,9 +105,11 @@ async def lifespan(app: FastAPI):
 async def seed_demo_merchants():
     """Seed 3 demo merchants only if not already present. Demo mode only."""
     import os
+
     from sqlmodel import Session, select
-    from models.merchant import Merchant, Product
+
     from arm.generator import get_or_generate_arm
+    from models.merchant import Merchant, Product
 
     seed_file = os.path.join(os.path.dirname(__file__), "data", "seed_merchants.json")
     if not os.path.exists(seed_file):
@@ -193,10 +199,6 @@ app.state.limiter = limiter
 
 
 # ── Phase 14: Consistent error responses ─────────────────────────────────────
-from fastapi.exceptions import RequestValidationError  # noqa: E402
-from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
-
-
 async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     """Phase 14: Rate limit errors in standard error format."""
     return JSONResponse(
@@ -282,8 +284,6 @@ app.add_middleware(
 
 
 # ── Request ID + Security Headers + Logging middleware ────────────────────────
-import time as _time  # noqa: E402
-
 _access_logger = logging.getLogger("agentsetu.access")
 
 

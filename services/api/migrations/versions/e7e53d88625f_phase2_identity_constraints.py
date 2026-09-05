@@ -13,16 +13,15 @@ Revision ID: e7e53d88625f
 Revises: 057223d89cd2
 Create Date: 2026-09-01 22:45:43.283417
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision: str = 'e7e53d88625f'
-down_revision: Union[str, Sequence[str], None] = '057223d89cd2'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = '057223d89cd2'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

@@ -3,11 +3,12 @@ Authorization Capability model.
 A capability is a bounded, one-time, expiring authorization token
 that gates payment execution. It cannot be replayed or transferred.
 """
-from sqlmodel import SQLModel, Field
-from typing import Optional
+import uuid
 from datetime import datetime
 from enum import Enum
-import uuid
+
+from sqlmodel import Field, SQLModel
+
 from utils.time import utc_now
 
 
@@ -21,7 +22,7 @@ class CapabilityStatus(str, Enum):
 class AuthorizationCapability(SQLModel, table=True):
     __tablename__ = "authorization_capabilities"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     capability_id: str = Field(
         default_factory=lambda: f"cap_{uuid.uuid4().hex[:16]}",
         unique=True,
@@ -29,11 +30,11 @@ class AuthorizationCapability(SQLModel, table=True):
     )
 
     # Binding — must all match at consumption time
-    buyer_id: Optional[str] = Field(default=None, index=True)    # user_id
+    buyer_id: str | None = Field(default=None, index=True)    # user_id
     merchant_id: str = Field(index=True)
     product_id: str
     transaction_id: str = Field(index=True)
-    approval_id: Optional[str] = None
+    approval_id: str | None = None
 
     # Amount binding
     amount_inr: int
@@ -46,8 +47,8 @@ class AuthorizationCapability(SQLModel, table=True):
     # Lifecycle
     status: CapabilityStatus = CapabilityStatus.ACTIVE
     expires_at: datetime
-    consumed_at: Optional[datetime] = None
-    revoked_at: Optional[datetime] = None
-    revoke_reason: Optional[str] = None
+    consumed_at: datetime | None = None
+    revoked_at: datetime | None = None
+    revoke_reason: str | None = None
 
     created_at: datetime = Field(default_factory=utc_now)

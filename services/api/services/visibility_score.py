@@ -17,9 +17,9 @@ All weights are constants. The function is pure — given the same inputs, it
 always returns the same score.
 """
 from dataclasses import dataclass, field
-from typing import Optional
 from datetime import timedelta
-from sqlmodel import Session, select, func
+
+from sqlmodel import Session, func, select
 
 from models.merchant import Merchant, Product
 from models.transaction import Transaction, TransactionState

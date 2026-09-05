@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, CheckCircle2, AlertCircle, ArrowLeft, FileJson } from 'lucide-react'
+import { Upload, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import Nav from '@/components/ui/Nav'
+import AmbientBackground from '@/components/ui/AmbientBackground'
 import { merchantsApi } from '@/lib/api'
 
 const EXAMPLE_CATALOG = {
@@ -69,24 +70,25 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col relative">
+      <AmbientBackground variant="subtle" />
       <Nav active="merchant" />
 
-      <div className="max-w-3xl mx-auto w-full px-4 py-6 space-y-5">
+      <div className="max-w-3xl mx-auto w-full px-4 py-6 space-y-5 relative z-10">
         <div className="flex items-center gap-3">
           <Link href="/merchant" className="btn-ghost text-sm py-1.5 px-3">
             <ArrowLeft size={14} /> Back
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-white">Import Catalog</h1>
-            <p className="text-text-muted text-sm">Upload your product catalog to generate an ARM manifest</p>
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">Import Catalog</h1>
+            <p className="text-[var(--text-muted)] text-sm">Upload your product catalog to generate an ARM manifest</p>
           </div>
         </div>
 
         {/* Required fields */}
-        <div className="glass-card p-4">
-          <h3 className="text-sm font-semibold text-white mb-3">Required Fields</h3>
-          <div className="grid grid-cols-2 gap-2 text-xs text-text-muted">
+        <div className="neo-card p-5">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Required Fields</h3>
+          <div className="grid grid-cols-2 gap-2 text-xs text-[var(--text-muted)]">
             {[
               'merchant_id (unique string)',
               'merchant_name',
@@ -96,7 +98,7 @@ export default function ImportPage() {
               'products[].category',
             ].map(f => (
               <div key={f} className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-agent" />
+                <div className="w-1.5 h-1.5 rounded-full bg-[var(--teal-400)]" />
                 <span className="font-mono">{f}</span>
               </div>
             ))}
@@ -106,8 +108,8 @@ export default function ImportPage() {
         {/* JSON editor */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm text-text-secondary">Catalog JSON</label>
-            <button onClick={loadExample} className="text-xs text-agent hover:underline">
+            <label className="text-sm text-[var(--text-secondary)] font-medium">Catalog JSON</label>
+            <button onClick={loadExample} className="text-xs text-[var(--accent)] hover:underline">
               Load example
             </button>
           </div>
@@ -115,14 +117,14 @@ export default function ImportPage() {
             value={json}
             onChange={e => setJson(e.target.value)}
             placeholder={JSON.stringify(EXAMPLE_CATALOG, null, 2)}
-            className="glass-input font-mono text-xs h-80 resize-y"
+            className="neo-input font-mono text-xs h-80 resize-y"
             spellCheck={false}
           />
         </div>
 
         {/* Error */}
         {error && (
-          <div className="flex items-start gap-2 p-3 bg-danger/10 border border-danger/25 rounded-xl text-danger text-sm">
+          <div className="flex items-start gap-2 p-3 bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-xl text-[var(--danger)] text-sm">
             <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
             <span>{error}</span>
           </div>
@@ -133,20 +135,20 @@ export default function ImportPage() {
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glass-card p-5 border-trust/25 bg-trust/5"
+            className="neo-card p-6 border-[var(--success)]/20 bg-[var(--success-bg)]"
           >
             <div className="flex items-center gap-2 mb-3">
-              <CheckCircle2 className="text-trust" size={20} />
-              <span className="font-semibold text-white">Import Successful</span>
+              <CheckCircle2 className="text-[var(--success)]" size={20} />
+              <span className="font-semibold text-[var(--text-primary)]">Import Successful</span>
             </div>
             <div className="space-y-2 text-sm">
-              <p className="text-text-secondary">✅ {result.products_imported} products imported</p>
-              <p className="text-text-secondary">🔧 ARM manifest generated: {result.arm_generated ? 'Yes' : 'No'}</p>
+              <p className="text-[var(--text-secondary)]">✅ {result.products_imported} products imported</p>
+              <p className="text-[var(--text-secondary)]">🔧 ARM manifest generated: {result.arm_generated ? 'Yes' : 'No'}</p>
               {result.errors?.length > 0 && (
                 <div>
-                  <p className="text-warning">⚠️ {result.errors.length} rows had errors:</p>
+                  <p className="text-[var(--warning)]">⚠️ {result.errors.length} rows had errors:</p>
                   {result.errors.map((e: any, i: number) => (
-                    <p key={i} className="text-text-muted text-xs pl-4">• {e.product_id}: {e.error}</p>
+                    <p key={i} className="text-[var(--text-muted)] text-xs pl-4">• {e.product_id}: {e.error}</p>
                   ))}
                 </div>
               )}
@@ -165,7 +167,10 @@ export default function ImportPage() {
           className="btn-primary w-full justify-center py-3"
         >
           {loading ? (
-            <><span className="animate-spin">⚡</span> Generating ARM…</>
+            <>
+              <span className="animate-spin inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+              Generating ARM…
+            </>
           ) : (
             <><Upload size={16} /> Import & Generate ARM</>
           )}

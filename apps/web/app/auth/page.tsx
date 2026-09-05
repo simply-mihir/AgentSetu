@@ -3,9 +3,20 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Zap, Mail, Lock, User, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
+import { Mail, Lock, User, ArrowRight, Loader2, AlertCircle, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useAuth } from '@/lib/auth'
+import AmbientBackground from '@/components/ui/AmbientBackground'
+
+const AgentSetuOrb = dynamic(() => import('@/components/agent/AgentSetuOrb'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-[240px] h-[240px] flex items-center justify-center">
+      <div className="w-36 h-36 rounded-full bg-gradient-to-br from-[var(--green-200)] to-[var(--teal-200)] opacity-25 animate-pulse" />
+    </div>
+  ),
+})
 
 type Mode = 'login' | 'signup'
 
@@ -24,11 +35,8 @@ function AuthForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      router.push(redirect)
-    }
+    if (isAuthenticated) router.push(redirect)
   }, [isAuthenticated, redirect, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,90 +71,145 @@ function AuthForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      {/* Background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-20 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-agent/08 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8 relative">
+      <AmbientBackground variant="auth" />
 
+      {/* ═══ Large rounded container ═══ */}
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 w-full max-w-md"
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="
+          relative z-10 w-full max-w-5xl
+          bg-[var(--surface)]/80 backdrop-blur-xl
+          border border-[var(--border)]
+          rounded-[32px] shadow-xl
+          overflow-hidden
+          flex flex-col lg:flex-row
+          min-h-[600px] lg:min-h-[640px]
+        "
       >
-        {/* Logo */}
-        <Link href="/" className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-10 h-10 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center">
-            <Zap size={20} className="text-primary" />
-          </div>
-          <span className="text-2xl font-bold text-white">AgentSetu</span>
-        </Link>
+        {/* ── Left: Visual panel ──────────────────────────────── */}
+        <div className="
+          hidden lg:flex lg:w-[48%]
+          bg-gradient-to-br from-[var(--pale-green)] via-[var(--surface-soft)] to-[var(--light-aqua)]
+          flex-col items-center justify-center
+          p-10 relative overflow-hidden
+        ">
+          {/* Ambient glow behind orb */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: 'radial-gradient(circle at 50% 40%, var(--green-200) 0%, transparent 60%)',
+              opacity: 0.3,
+            }}
+          />
 
-        {/* Card */}
-        <div className="glass-card p-8">
-          <h2 className="text-xl font-bold text-white text-center mb-1">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2, duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="relative z-10"
+          >
+            <AgentSetuOrb variant="auth" status="idle" />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+            className="relative z-10 mt-6 text-center max-w-sm"
+          >
+            <h2 className="text-xl font-bold text-[var(--text-primary)] leading-snug mb-3">
+              AI commerce,{' '}
+              <span className="bg-gradient-to-r from-[var(--sea-green)] to-[var(--mint)] bg-clip-text text-transparent">
+                still under your
+              </span>{' '}
+              control.
+            </h2>
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+              AgentSetu lets AI discover and purchase products while policies and
+              one-time authorization keep every transaction within your rules.
+            </p>
+          </motion.div>
+        </div>
+
+        {/* ── Right: Auth form ────────────────────────────────── */}
+        <div className="flex-1 flex flex-col justify-center px-8 sm:px-12 lg:px-14 py-10 lg:py-0">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2 mb-8">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[var(--mint)] to-[var(--sea-green)] flex items-center justify-center shadow-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="5" fill="white" opacity="0.9"/>
+                <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="1.5" opacity="0.5"/>
+              </svg>
+            </div>
+            <span className="text-lg font-bold text-[var(--text-primary)]">AgentSetu</span>
+          </Link>
+
+          {/* Heading */}
+          <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-1">
             {mode === 'login' ? 'Welcome back' : 'Create account'}
           </h2>
-          <p className="text-text-muted text-sm text-center mb-6">
+          <p className="text-sm text-[var(--text-muted)] mb-7">
             {mode === 'login'
-              ? 'Sign in to your AgentSetu account'
-              : 'Get started with agentic commerce'}
+              ? 'Sign in to continue to AgentSetu.'
+              : 'Get started with agentic commerce.'}
           </p>
 
           {/* Session expired notice */}
           {expired && mode === 'login' && (
-            <div className="flex items-center gap-2 bg-warning/10 border border-warning/20 rounded-xl p-3 mb-4">
-              <AlertCircle size={14} className="text-warning flex-shrink-0" />
-              <span className="text-xs text-warning">Your session has expired. Please sign in again.</span>
+            <div className="flex items-center gap-2 bg-[var(--warning-bg)] border border-[var(--warning-border)] rounded-2xl p-3 mb-5">
+              <AlertCircle size={14} className="text-[var(--warning)] flex-shrink-0" />
+              <span className="text-xs text-[var(--warning)]">Your session has expired. Please sign in again.</span>
             </div>
           )}
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 bg-danger/10 border border-danger/20 rounded-xl p-3 mb-4">
-              <AlertCircle size={14} className="text-danger flex-shrink-0" />
-              <span className="text-xs text-danger">{error}</span>
+            <div className="flex items-center gap-2 bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-2xl p-3 mb-5">
+              <AlertCircle size={14} className="text-[var(--danger)] flex-shrink-0" />
+              <span className="text-xs text-[var(--danger)]">{error}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
               <div>
-                <label className="text-xs text-text-muted mb-1.5 block">Display Name</label>
+                <label className="text-xs font-medium text-[var(--text-secondary)] mb-1.5 block">Display Name</label>
                 <div className="relative">
-                  <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <User size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                   <input
                     type="text"
                     value={displayName}
                     onChange={e => setDisplayName(e.target.value)}
                     placeholder="Your name"
-                    className="glass-input pl-9 text-sm"
+                    className="neo-input pl-11 text-sm rounded-[18px]"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="text-xs text-text-muted mb-1.5 block">Email</label>
+              <label className="text-xs font-medium text-[var(--text-secondary)] mb-1.5 block">Email</label>
               <div className="relative">
-                <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <Mail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="glass-input pl-9 text-sm"
+                  className="neo-input pl-11 text-sm rounded-[18px]"
                   autoComplete="email"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs text-text-muted mb-1.5 block">Password</label>
+              <label className="text-xs font-medium text-[var(--text-secondary)] mb-1.5 block">Password</label>
               <div className="relative">
-                <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   type="password"
                   value={password}
@@ -154,7 +217,7 @@ function AuthForm() {
                   placeholder="••••••••"
                   required
                   minLength={8}
-                  className="glass-input pl-9 text-sm"
+                  className="neo-input pl-11 text-sm rounded-[18px]"
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 />
               </div>
@@ -162,25 +225,24 @@ function AuthForm() {
 
             {mode === 'signup' && (
               <div>
-                <label className="text-xs text-text-muted mb-1.5 block">I am a…</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs font-medium text-[var(--text-secondary)] mb-1.5 block">I am a…</label>
+                <div className="grid grid-cols-2 gap-2.5">
                   {[
-                    { value: 'BUYER', label: '🛒 Buyer', desc: 'Purchase via AI agent' },
-                    { value: 'MERCHANT_OWNER', label: '🏪 Merchant', desc: 'List products & policies' },
+                    { value: 'BUYER', label: 'Buyer', desc: 'Purchase via AI agent', icon: '🛒' },
+                    { value: 'MERCHANT_OWNER', label: 'Merchant', desc: 'List products & policies', icon: '🏪' },
                   ].map(opt => (
                     <button
                       key={opt.value}
                       type="button"
                       onClick={() => setRole(opt.value)}
-                      className={`glass-card p-3 text-left transition-all ${
+                      className={`p-3.5 text-left rounded-2xl border transition-all ${
                         role === opt.value
-                          ? 'border-primary/50 bg-primary/10'
-                          : 'hover:border-white/15'
+                          ? 'border-[var(--accent)]/30 bg-[var(--accent-soft)] shadow-sm'
+                          : 'border-[var(--border)] hover:border-[var(--border-strong)]'
                       }`}
-                      style={{ borderRadius: 12 }}
                     >
-                      <div className="text-sm font-medium text-white">{opt.label}</div>
-                      <div className="text-[10px] text-text-muted mt-0.5">{opt.desc}</div>
+                      <div className="text-sm font-medium text-[var(--text-primary)]">{opt.icon} {opt.label}</div>
+                      <div className="text-[10px] text-[var(--text-muted)] mt-0.5">{opt.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -190,7 +252,7 @@ function AuthForm() {
             <button
               type="submit"
               disabled={loading || !email || !password}
-              className="btn-primary w-full justify-center"
+              className="btn-primary w-full justify-center py-3.5 rounded-[18px] text-sm"
             >
               {loading ? (
                 <Loader2 size={16} className="animate-spin" />
@@ -206,19 +268,19 @@ function AuthForm() {
           <div className="mt-6 text-center">
             <button
               onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError('') }}
-              className="text-sm text-text-muted hover:text-primary transition-colors"
+              className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
             >
               {mode === 'login'
                 ? "Don't have an account? Sign up"
                 : 'Already have an account? Sign in'}
             </button>
           </div>
-        </div>
 
-        {/* Trust badge */}
-        <div className="mt-4 text-center text-xs text-text-muted">
-          <span className="chip-trust" style={{ fontSize: 9 }}>Secure</span>
-          {' '}Passwords hashed with Argon2 · JWT auth · No secrets in browser
+          {/* Security footer */}
+          <div className="mt-8 flex items-center justify-center gap-2 text-[10px] text-[var(--text-muted)]">
+            <ShieldCheck size={11} className="text-[var(--success)]" />
+            <span>Protected by authenticated, policy-aware access.</span>
+          </div>
         </div>
       </motion.div>
     </div>
@@ -228,8 +290,8 @@ function AuthForm() {
 export default function AuthPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="animate-spin text-primary" size={24} />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
+        <Loader2 className="animate-spin text-[var(--accent)]" size={24} />
       </div>
     }>
       <AuthForm />

@@ -1,8 +1,9 @@
-from sqlmodel import SQLModel, Field
-from typing import Optional
+import uuid
 from datetime import datetime
 from enum import Enum
-import uuid
+
+from sqlmodel import Field, SQLModel
+
 from utils.time import utc_now
 
 
@@ -73,7 +74,7 @@ def validate_transition(current: TransactionState, target: TransactionState) -> 
 class Transaction(SQLModel, table=True):
     __tablename__ = "transactions"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     transaction_id: str = Field(
         default_factory=lambda: f"txn_{uuid.uuid4().hex[:8]}",
         unique=True,
@@ -85,7 +86,7 @@ class Transaction(SQLModel, table=True):
     )
 
     # Buyer identity — set from auth context, never from client
-    buyer_id: Optional[str] = Field(
+    buyer_id: str | None = Field(
         default=None, index=True,
         foreign_key="users.user_id",
     )
@@ -95,43 +96,43 @@ class Transaction(SQLModel, table=True):
     parsed_constraints: str = "{}"  # JSON
 
     # Merchant/product selection
-    merchant_id: Optional[str] = Field(
+    merchant_id: str | None = Field(
         default=None, index=True,
         foreign_key="merchants.merchant_id",
     )
-    merchant_name: Optional[str] = None
-    product_id: Optional[str] = None
-    product_name: Optional[str] = None
-    amount_inr: Optional[int] = None  # Final approved amount
+    merchant_name: str | None = None
+    product_id: str | None = None
+    product_name: str | None = None
+    amount_inr: int | None = None  # Final approved amount
 
     # Comparison results (JSON)
     candidates_json: str = "[]"
     selected_reason: str = ""
 
     # Policy decision
-    policy_result: Optional[str] = None  # ALLOW / DENY / NEEDS_APPROVAL
+    policy_result: str | None = None  # ALLOW / DENY / NEEDS_APPROVAL
     policy_reason_codes: str = "[]"  # JSON
 
     # Approval
-    approval_id: Optional[str] = None
-    approved_by: Optional[str] = "buyer"
-    approved_at: Optional[datetime] = None
+    approval_id: str | None = None
+    approved_by: str | None = "buyer"
+    approved_at: datetime | None = None
 
     # Razorpay
-    razorpay_payment_link_id: Optional[str] = None
-    razorpay_payment_link_url: Optional[str] = None
-    razorpay_order_id: Optional[str] = None
-    razorpay_payment_id: Optional[str] = None
+    razorpay_payment_link_id: str | None = None
+    razorpay_payment_link_url: str | None = None
+    razorpay_order_id: str | None = None
+    razorpay_payment_id: str | None = None
 
     # Transaction fingerprint (idempotency)
-    fingerprint: Optional[str] = None
+    fingerprint: str | None = None
 
     # State machine
     state: TransactionState = TransactionState.DRAFT
 
     # Recovery
-    recovery_action: Optional[str] = None
-    failure_reason: Optional[str] = None
+    recovery_action: str | None = None
+    failure_reason: str | None = None
 
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

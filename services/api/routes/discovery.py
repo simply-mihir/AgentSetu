@@ -1,10 +1,11 @@
 """Discovery routes — search merchants and products by agent constraints."""
 import os
-from typing import Optional
+
 from fastapi import APIRouter, Depends, Query, Request
-from sqlmodel import Session, select
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from sqlmodel import Session, select
+
 from database import get_session
 from models.merchant import Merchant, Product
 
@@ -19,11 +20,11 @@ _limiter = Limiter(key_func=get_remote_address, enabled=not _testing)
 @_limiter.limit("30/minute")
 async def discover(
     request: Request,
-    category: Optional[str] = Query(None, description="Product category"),
-    max_price: Optional[int] = Query(None, description="Maximum price in INR"),
-    delivery_sla: Optional[int] = Query(None, description="Max delivery days"),
-    keyword: Optional[str] = Query(None, description="Product keyword search"),
-    merchant_id: Optional[str] = Query(None, description="Filter by merchant"),
+    category: str | None = Query(None, description="Product category"),
+    max_price: int | None = Query(None, description="Maximum price in INR"),
+    delivery_sla: int | None = Query(None, description="Max delivery days"),
+    keyword: str | None = Query(None, description="Product keyword search"),
+    merchant_id: str | None = Query(None, description="Filter by merchant"),
     limit: int = Query(50, ge=1, le=200, description="Max results to return"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     session: Session = Depends(get_session),

@@ -6,10 +6,10 @@ from product-level data (internal implementation detail).
 import hashlib
 import json
 import uuid
-from datetime import datetime
+
 from pydantic import BaseModel, Field
+
 from utils.time import utc_now
-from typing import List
 
 
 class ARMProduct(BaseModel):
@@ -19,7 +19,7 @@ class ARMProduct(BaseModel):
     price_inr: int
     inventory_count: int
     availability: bool
-    delivery_sla_days: List[int]  # [min, max]
+    delivery_sla_days: list[int]  # [min, max]
     return_policy: str
     merchant_rating: float
     description: str = ""
@@ -31,7 +31,7 @@ class ARMProduct(BaseModel):
 class ARMPolicies(BaseModel):
     max_autonomous_spend_inr: int = 500
     approval_required_above_inr: int = 500
-    restricted_categories: List[str] = []
+    restricted_categories: list[str] = []
     refund_authority: str = "human_only"
 
 
@@ -49,7 +49,7 @@ class ARMManifest(BaseModel):
     generated_at: str = Field(default_factory=lambda: utc_now().isoformat() + "Z")
     manifest_hash: str = ""     # Computed after serialization
     merchant: ARMMerchant
-    products: List[ARMProduct]
+    products: list[ARMProduct]
     policies: ARMPolicies
     payment: dict = Field(default_factory=lambda: {
         "provider": "razorpay",
@@ -75,12 +75,12 @@ class MerchantImportRequest(BaseModel):
     category: str = ""
     max_autonomous_spend_inr: int = 500
     approval_threshold_inr: int = 500
-    restricted_categories: List[str] = []
-    products: List[dict]
+    restricted_categories: list[str] = []
+    products: list[dict]
 
 
 class PolicyUpdateRequest(BaseModel):
     max_autonomous_spend_inr: int
     approval_threshold_inr: int
-    restricted_categories: List[str] = []
+    restricted_categories: list[str] = []
     refund_authority: str = "human_only"

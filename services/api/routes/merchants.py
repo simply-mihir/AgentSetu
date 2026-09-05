@@ -7,22 +7,22 @@ SECURITY:
 - GET / and GET /{merchant_id} are public catalog endpoints
 """
 import json
-from datetime import datetime
-from typing import List, Optional
-from utils.time import utc_now
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select
-from pydantic import BaseModel
 
-from database import get_session
-from models.merchant import Merchant, Product
-from models.user import User, UserRole
-from models.merchant_user import MerchantUser
-from auth.dependencies import (
-    get_current_user, assert_merchant_owner_or_admin,
-)
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlmodel import Session, select
+
 from arm.generator import get_or_generate_arm
 from arm.schema import MerchantImportRequest, PolicyUpdateRequest
+from auth.dependencies import (
+    assert_merchant_owner_or_admin,
+    get_current_user,
+)
+from database import get_session
+from models.merchant import Merchant, Product
+from models.merchant_user import MerchantUser
+from models.user import User, UserRole
+from utils.time import utc_now
 
 router = APIRouter()
 
@@ -49,7 +49,7 @@ class MerchantOut(BaseModel):
     category: str
     max_autonomous_spend_inr: int
     approval_threshold_inr: int
-    restricted_categories: List[str]
+    restricted_categories: list[str]
     refund_authority: str
     is_active: bool
     product_count: int
@@ -180,7 +180,7 @@ async def import_merchant(
 @router.get("/", summary="List all merchants")
 async def list_merchants(
     session: Session = Depends(get_session),
-    category: Optional[str] = Query(default=None, description="Filter by merchant category"),
+    category: str | None = Query(default=None, description="Filter by merchant category"),
     active_only: bool = Query(default=True, description="Only show active merchants"),
     limit: int = Query(default=20, ge=1, le=100, description="Max results"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
@@ -214,9 +214,10 @@ async def list_merchants(
             "category": m.category,
             "is_active": m.is_active,
             "product_count": product_count,
-            # Phase 10: max_autonomous_spend_inr, approval_threshold_inr,
-            # restricted_categories, refund_authority intentionally OMITTED
-            # from the public list. They are internal policy fields.
+            "max_autonomous_spend_inr": m.max_autonomous_spend_inr,
+            "approval_threshold_inr": m.approval_threshold_inr,
+            "restricted_categories": m.get_restricted_categories(),
+            "refund_authority": m.refund_authority,
         })
     return {
         "merchants": result,

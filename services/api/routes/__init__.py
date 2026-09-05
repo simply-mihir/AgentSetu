@@ -1,5 +1,16 @@
 from fastapi import APIRouter
-from routes import auth, merchants, discovery, transactions, payments, audit, webhooks, mcp, analytics
+
+from routes import (
+    analytics,
+    audit,
+    auth,
+    discovery,
+    mcp,
+    merchants,
+    payments,
+    transactions,
+    webhooks,
+)
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])

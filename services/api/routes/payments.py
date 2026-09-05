@@ -10,26 +10,27 @@ All endpoints require authentication (C2 fix).
 """
 import json
 from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Request
-from utils.time import utc_now
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlmodel import Session, select
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from sqlmodel import Session, select
 
-from database import get_session
-from models.merchant import Merchant, Product
-from models.transaction import Transaction, TransactionState
-from models.user import User, UserRole, BuyerProfile
-from models.merchant_user import MerchantUser
-from models.idempotency import IdempotencyRecord
-from policy.engine import PolicyEngine, PolicyDecision, BuyerPolicyContext
-from payments.razorpay_adapter import razorpay_adapter, PaymentStatus
-from capability.service import capability_service
 from audit.service import audit_service
 from auth.dependencies import get_current_user
-from errors import make_error, ErrorCode
+from capability.service import capability_service
+from database import get_session
+from errors import ErrorCode, make_error
+from models.idempotency import IdempotencyRecord
+from models.merchant import Merchant, Product
+from models.merchant_user import MerchantUser
+from models.transaction import Transaction, TransactionState
+from models.user import BuyerProfile, User, UserRole
+from payments.razorpay_adapter import PaymentStatus, razorpay_adapter
+from policy.engine import BuyerPolicyContext, PolicyDecision, PolicyEngine
+from utils.time import utc_now
 
 router = APIRouter()
 policy_engine = PolicyEngine()

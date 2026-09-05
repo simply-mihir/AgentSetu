@@ -8,8 +8,9 @@ import hmac
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+
 import razorpay
+
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -28,12 +29,12 @@ class PaymentStatus(str, Enum):
 @dataclass
 class PaymentLinkResult:
     success: bool
-    payment_link_id: Optional[str] = None
-    payment_link_url: Optional[str] = None
-    amount_inr: Optional[int] = None
+    payment_link_id: str | None = None
+    payment_link_url: str | None = None
+    amount_inr: int | None = None
     status: PaymentStatus = PaymentStatus.UNKNOWN
-    error: Optional[str] = None
-    raw: Optional[dict] = None
+    error: str | None = None
+    raw: dict | None = None
 
 
 class RazorpayAdapter:
@@ -65,7 +66,7 @@ class RazorpayAdapter:
         product_name: str,
         transaction_id: str,
         description: str = "",
-        reference_id: Optional[str] = None,
+        reference_id: str | None = None,
     ) -> PaymentLinkResult:
         """
         Create a Razorpay Payment Link in test mode.

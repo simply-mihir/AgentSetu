@@ -21,6 +21,12 @@ interface AuthContextType {
   signup: (email: string, password: string, role: string, displayName?: string) => Promise<void>
   logout: () => void
   isAuthenticated: boolean
+  /** True when the current session is a one-time demo */
+  isDemoMode: boolean
+  /** Start a one-time demo session. Returns false if demo already used. */
+  startDemo: () => boolean
+  /** Whether a demo is still available on this device */
+  demoAvailable: boolean
 }
 
 // ── Context ─────────────────────────────────────────────────────────────────
@@ -33,6 +39,9 @@ const AuthContext = createContext<AuthContextType>({
   signup: async () => {},
   logout: () => {},
   isAuthenticated: false,
+  isDemoMode: false,
+  startDemo: () => false,
+  demoAvailable: true,
 })
 
 export const useAuth = () => useContext(AuthContext)
@@ -42,6 +51,15 @@ export const useAuth = () => useContext(AuthContext)
 const TOKEN_KEY = 'agentsetu_token'
 const REFRESH_KEY = 'agentsetu_refresh'
 const USER_KEY = 'agentsetu_user'
+const DEMO_USED_KEY = 'agentsetu_demo_used'
+const DEMO_ACTIVE_KEY = 'agentsetu_demo_active'
+
+const DEMO_USER: AuthUser = {
+  user_id: 'demo-user',
+  email: 'demo@agentsetu.dev',
+  display_name: 'Demo User',
+  role: 'BUYER',
+}
 
 function saveAuth(token: string, user: AuthUser, refreshToken?: string) {
   try {
@@ -75,14 +93,10 @@ function clearAuth() {
 
 // ── Public routes that don't need auth ──────────────────────────────────────
 
-const PUBLIC_ROUTES = ['/', '/auth', '/merchant']
+const PUBLIC_ROUTES = ['/', '/auth']
 
 function isPublicRoute(path: string): boolean {
-  // Exact matches for public routes
-  if (PUBLIC_ROUTES.includes(path)) return true
-  // Merchant detail pages (GET is public)
-  if (path.startsWith('/merchant') && !path.includes('/import') && !path.includes('/policy')) return true
-  return false
+  return PUBLIC_ROUTES.includes(path)
 }
 
 // ── Provider ────────────────────────────────────────────────────────────────
@@ -91,6 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isDemoMode, setIsDemoMode] = useState(false)
+  const [demoAvailable, setDemoAvailable] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
 
@@ -134,6 +150,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Try silent refresh
         const stored = loadAuth()
         if (!stored.refreshToken) {
+          // In demo mode, don't redirect — just let the call fail gracefully
+          try {
+            if (sessionStorage.getItem(DEMO_ACTIVE_KEY)) {
+              return Promise.reject(error)
+            }
+          } catch {}
           clearAuth(); setUser(null); setToken(null)
           router.push('/auth?expired=1')
           return Promise.reject(error)
@@ -172,13 +194,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => api.interceptors.response.eject(interceptor)
   }, [router])
 
-  // Load stored auth on mount
+  // Load stored auth on mount — also restore demo session if active
   useEffect(() => {
     const stored = loadAuth()
     if (stored.token && stored.user) {
       setToken(stored.token)
       setUser(stored.user)
+    } else {
+      // Restore demo session if it was active in this tab
+      try {
+        if (sessionStorage.getItem(DEMO_ACTIVE_KEY)) {
+          setUser(DEMO_USER)
+          setToken('demo')
+          setIsDemoMode(true)
+        }
+      } catch {}
     }
+
+    // Check if demo has been used on this device
+    try {
+      setDemoAvailable(!localStorage.getItem(DEMO_USED_KEY))
+    } catch {}
+
     setLoading(false)
   }, [])
 
@@ -196,6 +233,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveAuth(access_token, authUser, rt)
     setToken(access_token)
     setUser(authUser)
+    // If user logs in, clear demo mode
+    setIsDemoMode(false)
+    try { sessionStorage.removeItem(DEMO_ACTIVE_KEY) } catch {}
   }, [])
 
   const signup = useCallback(async (email: string, password: string, role: string, displayName?: string) => {
@@ -210,9 +250,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveAuth(access_token, authUser, rt)
     setToken(access_token)
     setUser(authUser)
+    setIsDemoMode(false)
+    try { sessionStorage.removeItem(DEMO_ACTIVE_KEY) } catch {}
   }, [])
 
   const logout = useCallback(async () => {
+    if (isDemoMode) {
+      // Demo logout — clear session state, no backend call needed
+      try { sessionStorage.removeItem(DEMO_ACTIVE_KEY) } catch {}
+      setUser(null)
+      setToken(null)
+      setIsDemoMode(false)
+      router.push('/')
+      return
+    }
     // N12 FIX: Call backend to revoke JTI before clearing local state
     try {
       await api.post('/auth/logout')
@@ -223,7 +274,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setToken(null)
     router.push('/')
-  }, [router])
+  }, [router, isDemoMode])
+
+  /**
+   * Start a one-time demo session.
+   * Uses localStorage to track usage per device (production would use server-side IP tracking).
+   * Returns false if demo was already used.
+   */
+  const startDemo = useCallback((): boolean => {
+    try {
+      if (localStorage.getItem(DEMO_USED_KEY)) {
+        setDemoAvailable(false)
+        return false
+      }
+      // Mark demo as used on this device
+      localStorage.setItem(DEMO_USED_KEY, new Date().toISOString())
+      // Mark demo as active for this browser tab
+      sessionStorage.setItem(DEMO_ACTIVE_KEY, 'true')
+    } catch {}
+
+    setUser(DEMO_USER)
+    setToken('demo')
+    setIsDemoMode(true)
+    setDemoAvailable(false)
+    return true
+  }, [])
 
   return (
     <AuthContext.Provider value={{
@@ -234,6 +309,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signup,
       logout,
       isAuthenticated: !!user && !!token,
+      isDemoMode,
+      startDemo,
+      demoAvailable,
     }}>
       {children}
     </AuthContext.Provider>

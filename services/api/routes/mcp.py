@@ -12,16 +12,17 @@ SECURITY:
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from database import get_session
-from models.user import User
 from auth.dependencies import get_optional_user
+from database import get_session
+from mcp.handler import MCPError, handle_tool_call
 from mcp.tools import TOOLS
-from mcp.handler import handle_tool_call, MCPError
+from models.user import User
 
 logger = logging.getLogger("agentsetu.mcp")
 
@@ -53,7 +54,7 @@ async def list_tools():
 async def call_tool(
     request: ToolCallRequest,
     session: Session = Depends(get_session),
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User | None = Depends(get_optional_user),
 ):
     """
     Execute an MCP tool call.

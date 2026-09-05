@@ -1,12 +1,14 @@
 """Alembic environment — reads DATABASE_URL from application config."""
-from logging.config import fileConfig
-from sqlalchemy import pool
-from alembic import context
-from sqlmodel import SQLModel
+import os
 
 # Import all models so metadata is populated
 import sys
-import os
+from logging.config import fileConfig
+
+from alembic import context
+from sqlalchemy import pool
+from sqlmodel import SQLModel
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import models  # noqa: F401 — registers all table metadata
 
@@ -38,6 +40,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     from sqlalchemy import create_engine
+
     from config import settings
 
     connectable = create_engine(

@@ -14,9 +14,9 @@ All money-movement decisions go through here — no exceptions.
 8. Effective spend limit (min of merchant + buyer per-txn)
 9. Approval threshold
 """
-from enum import Enum
-from typing import List, Optional
 from dataclasses import dataclass, field
+from enum import Enum
+
 from models.merchant import Merchant, Product
 
 
@@ -29,20 +29,20 @@ class PolicyDecision(str, Enum):
 @dataclass
 class BuyerPolicyContext:
     """Buyer-side policy data loaded from BuyerProfile (server-side only)."""
-    per_transaction_auto_limit_inr: Optional[int] = None
-    daily_limit_inr: Optional[int] = None
+    per_transaction_auto_limit_inr: int | None = None
+    daily_limit_inr: int | None = None
     daily_spent_inr: int = 0  # sum of today's successful/pending txns
-    blocked_merchants: List[str] = field(default_factory=list)
-    blocked_categories: List[str] = field(default_factory=list)
+    blocked_merchants: list[str] = field(default_factory=list)
+    blocked_categories: list[str] = field(default_factory=list)
 
 
 @dataclass
 class PolicyResult:
     decision: PolicyDecision
-    reason_codes: List[str] = field(default_factory=list)
-    effective_limit_inr: Optional[int] = None
+    reason_codes: list[str] = field(default_factory=list)
+    effective_limit_inr: int | None = None
     message: str = ""
-    requires_approval_above: Optional[int] = None
+    requires_approval_above: int | None = None
 
 
 class PolicyEngine:
@@ -56,9 +56,9 @@ class PolicyEngine:
         merchant: Merchant,
         product: Product,
         amount_inr: int,
-        buyer_limit_inr: Optional[int] = None,
+        buyer_limit_inr: int | None = None,
         is_approved: bool = False,
-        buyer_context: Optional[BuyerPolicyContext] = None,
+        buyer_context: BuyerPolicyContext | None = None,
     ) -> PolicyResult:
         reason_codes = []
 
@@ -194,11 +194,11 @@ class PolicyEngine:
         amount_inr: int,
         merchant_max_auto_spend: int,
         merchant_approval_threshold: int,
-        restricted_categories: List[str],
+        restricted_categories: list[str],
         product_category: str,
         product_available: bool,
         inventory_count: int,
-        buyer_limit_inr: Optional[int] = None,
+        buyer_limit_inr: int | None = None,
         is_approved: bool = False,
     ) -> PolicyResult:
         """Evaluate policy without DB models (for API-level checks)."""

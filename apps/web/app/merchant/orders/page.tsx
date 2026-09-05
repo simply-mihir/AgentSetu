@@ -6,21 +6,22 @@ import { ArrowLeft, ShoppingBag } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import Nav from '@/components/ui/Nav'
+import AmbientBackground from '@/components/ui/AmbientBackground'
 import { transactionsApi, extractErrorMessage, type Transaction } from '@/lib/api'
 import { LoadingState, EmptyState, ErrorState } from '@/components/ui/StateViews'
 import { useAuth } from '@/lib/auth'
 
 const STATE_CHIPS: Record<string, string> = {
-  DRAFT: 'chip-primary',
-  PENDING_APPROVAL: 'chip-warning',
-  APPROVED: 'chip-trust',
-  PAYMENT_LINK_CREATED: 'chip-agent',
-  PAYMENT_SUCCESS: 'chip-trust',
-  PAYMENT_FAILED: 'chip-danger',
-  PAYMENT_UNKNOWN: 'chip-warning',
-  RECEIPT_ISSUED: 'chip-trust',
-  RECOVERY_PROPOSED: 'chip-warning',
-  CANCELLED: 'chip-danger',
+  DRAFT: 'chip chip-neutral',
+  PENDING_APPROVAL: 'chip chip-warning',
+  APPROVED: 'chip chip-success',
+  PAYMENT_LINK_CREATED: 'chip chip-mint',
+  PAYMENT_SUCCESS: 'chip chip-success',
+  PAYMENT_FAILED: 'chip chip-danger',
+  PAYMENT_UNKNOWN: 'chip chip-warning',
+  RECEIPT_ISSUED: 'chip chip-success',
+  RECOVERY_PROPOSED: 'chip chip-warning',
+  CANCELLED: 'chip chip-danger',
 }
 
 export default function MerchantOrdersPage() {
@@ -48,35 +49,36 @@ export default function MerchantOrdersPage() {
     .reduce((sum, t) => sum + (t.amount_inr || 0), 0)
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col relative">
+      <AmbientBackground variant="subtle" />
       <Nav active="merchant" />
 
-      <div className="max-w-4xl mx-auto w-full px-4 py-6 space-y-6">
+      <div className="max-w-4xl mx-auto w-full px-4 py-6 space-y-6 relative z-10">
         <div className="flex items-center gap-3">
           <Link href="/merchant" className="btn-ghost text-sm py-1.5 px-3">
             <ArrowLeft size={14} /> Back
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-white">Incoming Orders</h1>
-            <p className="text-text-muted text-sm">Transactions involving your merchant&apos;s products</p>
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">Incoming Orders</h1>
+            <p className="text-[var(--text-muted)] text-sm">Transactions involving your merchant&apos;s products</p>
           </div>
         </div>
 
         {!loading && !error && transactions.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="glass-card p-4">
-              <div className="text-xl font-bold" style={{ color: 'var(--primary)' }}>{transactions.length}</div>
-              <div className="text-text-muted text-xs mt-1">Total Orders</div>
+            <div className="neo-card p-4">
+              <div className="text-xl font-bold" style={{ color: 'var(--accent)' }}>{transactions.length}</div>
+              <div className="text-[var(--text-muted)] text-xs mt-1">Total Orders</div>
             </div>
-            <div className="glass-card p-4">
-              <div className="text-xl font-bold" style={{ color: 'var(--trust)' }}>
+            <div className="neo-card p-4">
+              <div className="text-xl font-bold" style={{ color: 'var(--success)' }}>
                 {transactions.filter(t => t.state === 'RECEIPT_ISSUED' || t.state === 'PAYMENT_SUCCESS').length}
               </div>
-              <div className="text-text-muted text-xs mt-1">Successful</div>
+              <div className="text-[var(--text-muted)] text-xs mt-1">Successful</div>
             </div>
-            <div className="glass-card p-4">
+            <div className="neo-card p-4">
               <div className="text-xl font-bold" style={{ color: 'var(--warning)' }}>₹{revenue}</div>
-              <div className="text-text-muted text-xs mt-1">Revenue</div>
+              <div className="text-[var(--text-muted)] text-xs mt-1">Revenue</div>
             </div>
           </div>
         )}
@@ -104,18 +106,18 @@ export default function MerchantOrdersPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.03 }}
               >
-                <Link href={`/audit?txn=${txn.transaction_id}`} className="glass-card p-4 flex items-center gap-4 hover:bg-white/02 transition-colors block">
+                <Link href={`/audit?txn=${txn.transaction_id}`} className="neo-card p-4 flex items-center gap-4 hover:bg-[var(--surface-soft)] transition-colors block">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className={STATE_CHIPS[txn.state] || 'chip-primary'} style={{ fontSize: 10 }}>
+                      <span className={STATE_CHIPS[txn.state] || 'chip chip-neutral'} style={{ fontSize: 10 }}>
                         {txn.state.replace(/_/g, ' ')}
                       </span>
                       {txn.amount_inr && (
-                        <span className="text-white font-semibold text-sm">₹{txn.amount_inr}</span>
+                        <span className="text-[var(--text-primary)] font-semibold text-sm">₹{txn.amount_inr}</span>
                       )}
                     </div>
-                    <p className="text-sm text-text-secondary truncate">{txn.buyer_intent}</p>
-                    <div className="flex gap-3 text-xs text-text-muted mt-1">
+                    <p className="text-sm text-[var(--text-secondary)] truncate">{txn.buyer_intent}</p>
+                    <div className="flex gap-3 text-xs text-[var(--text-muted)] mt-1">
                       {txn.product_name && <span>{txn.product_name}</span>}
                       <span>{format(new Date(txn.created_at), 'MMM d, HH:mm')}</span>
                     </div>

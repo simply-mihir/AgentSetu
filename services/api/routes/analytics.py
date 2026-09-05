@@ -11,15 +11,16 @@ Identity is ALWAYS derived from auth context — never from client-supplied merc
 """
 import logging
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select, func
 
-from database import get_session
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session, func, select
+
 from auth.dependencies import get_current_user
-from models.user import User
+from database import get_session
 from models.merchant import Merchant
 from models.merchant_user import MerchantUser
 from models.transaction import Transaction, TransactionState
+from models.user import User
 from services.visibility_score import compute_visibility_score
 from utils.time import utc_now
 

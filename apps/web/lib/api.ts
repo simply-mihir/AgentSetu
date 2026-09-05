@@ -116,7 +116,7 @@ export interface AuditEvent {
 
 // ── Merchants ─────────────────────────────────────────────────────────────────
 export const merchantsApi = {
-  list: () => api.get<Merchant[]>('/merchants/').then(r => r.data),
+  list: () => api.get('/merchants/').then(r => r.data?.merchants ?? r.data),
   get: (id: string) => api.get<Merchant>(`/merchants/${id}`).then(r => r.data),
   getArm: (id: string) => api.get(`/merchants/${id}/arm`).then(r => r.data),
   import: (data: any) => api.post('/merchants/import', data).then(r => r.data),

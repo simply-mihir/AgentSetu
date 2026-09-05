@@ -11,24 +11,23 @@ SECURITY:
   - No tool argument can override the caller's identity.
 """
 
-import json
 import hashlib
+import json
 import logging
 import uuid
-from datetime import datetime
-from typing import Any, Optional
-from utils.time import utc_now
+from typing import Any
 
 from sqlmodel import Session, select
 
-from models.user import User, UserRole
+from ai.orchestrator import buyer_orchestrator
+from audit.service import audit_service
+from mcp.tools import PUBLIC_TOOLS, TOOLS_BY_NAME
 from models.merchant import Merchant, Product
 from models.merchant_user import MerchantUser
 from models.transaction import Transaction, TransactionState, validate_transition
-from policy.engine import PolicyEngine, PolicyDecision
-from ai.orchestrator import buyer_orchestrator
-from audit.service import audit_service
-from mcp.tools import TOOLS_BY_NAME, PUBLIC_TOOLS
+from models.user import User, UserRole
+from policy.engine import PolicyDecision, PolicyEngine
+from utils.time import utc_now
 
 logger = logging.getLogger("agentsetu.mcp")
 policy_engine = PolicyEngine()
@@ -45,7 +44,7 @@ async def handle_tool_call(
     tool_name: str,
     arguments: dict[str, Any],
     session: Session,
-    user: Optional[User] = None,
+    user: User | None = None,
 ) -> dict[str, Any]:
     """
     Execute an MCP tool call and return the result.
@@ -111,7 +110,7 @@ def _make_fingerprint(merchant_id: str, product_id: str, amount: int, approval_i
 # ── Individual tool handlers ────────────────────────────────────────────────
 
 async def _discover_products(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     """Delegates to the same discovery logic as GET /v1/discover/."""
     products = session.exec(select(Product)).all()
@@ -159,7 +158,7 @@ async def _discover_products(
 
 
 async def _get_merchant_arm(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     merchant_id = args.get("merchant_id", "")
     if not merchant_id:
@@ -176,7 +175,7 @@ async def _get_merchant_arm(
 
 
 async def _list_merchants(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     merchants = session.exec(select(Merchant).where(Merchant.is_active.is_(True))).all()
     result = []
@@ -198,7 +197,7 @@ async def _list_merchants(
 
 
 async def _process_purchase_intent(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     """Same pipeline as POST /v1/transactions/intent."""
     message = args.get("message", "")
@@ -297,7 +296,7 @@ async def _process_purchase_intent(
 
 
 async def _select_product(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     for field in ("transaction_id", "product_id", "merchant_id"):
         if not args.get(field):
@@ -355,7 +354,7 @@ async def _select_product(
 
 
 async def _evaluate_policy(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     for field in ("merchant_id", "product_id", "amount_inr"):
         if args.get(field) is None:
@@ -396,7 +395,7 @@ async def _evaluate_policy(
 
 
 async def _approve_transaction(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     if not args.get("transaction_id"):
         raise MCPError("transaction_id is required", code="VALIDATION_ERROR")
@@ -449,7 +448,7 @@ async def _approve_transaction(
 
 
 async def _create_payment_link(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     """
     Thin wrapper — delegates to the payment route's internal logic.
@@ -472,7 +471,7 @@ async def _create_payment_link(
 
 
 async def _verify_payment(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     if not args.get("transaction_id"):
         raise MCPError("transaction_id is required", code="VALIDATION_ERROR")
@@ -500,7 +499,7 @@ async def _verify_payment(
 
 
 async def _get_receipt(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     if not args.get("transaction_id"):
         raise MCPError("transaction_id is required", code="VALIDATION_ERROR")
@@ -530,7 +529,7 @@ async def _get_receipt(
 
 
 async def _get_transaction(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     if not args.get("transaction_id"):
         raise MCPError("transaction_id is required", code="VALIDATION_ERROR")
@@ -564,7 +563,7 @@ async def _get_transaction(
 
 
 async def _list_transactions(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     if user.role == UserRole.PLATFORM_ADMIN:
         query = select(Transaction).order_by(Transaction.created_at.desc()).limit(50)
@@ -607,7 +606,7 @@ async def _list_transactions(
 
 
 async def _get_audit_timeline(
-    args: dict[str, Any], session: Session, user: Optional[User],
+    args: dict[str, Any], session: Session, user: User | None,
 ) -> dict[str, Any]:
     if not args.get("correlation_id"):
         raise MCPError("correlation_id is required", code="VALIDATION_ERROR")

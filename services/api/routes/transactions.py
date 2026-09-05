@@ -6,25 +6,24 @@ SECURITY: All data-access endpoints require authentication.
 Buyer sees only their own transactions. Merchant users see their merchant's
 transactions. PLATFORM_ADMIN sees all.
 """
-import json
 import hashlib
+import json
 import uuid
-from datetime import datetime
-from typing import Optional
-from utils.time import utc_now
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from database import get_session
-from models.merchant import Merchant, Product
-from models.transaction import Transaction, TransactionState, validate_transition
-from models.user import User, UserRole
-from models.merchant_user import MerchantUser
-from policy.engine import PolicyEngine, PolicyDecision
 from ai.orchestrator import buyer_orchestrator
 from audit.service import audit_service
 from auth.dependencies import get_current_user
+from database import get_session
+from models.merchant import Merchant, Product
+from models.merchant_user import MerchantUser
+from models.transaction import Transaction, TransactionState, validate_transition
+from models.user import User, UserRole
+from policy.engine import PolicyDecision, PolicyEngine
+from utils.time import utc_now
 
 router = APIRouter()
 policy_engine = PolicyEngine()
@@ -32,7 +31,7 @@ policy_engine = PolicyEngine()
 
 class IntentRequest(BaseModel):
     message: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class SelectProductRequest(BaseModel):

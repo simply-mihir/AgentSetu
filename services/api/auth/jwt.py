@@ -6,9 +6,10 @@ L8: Added refresh token helpers — generate raw token, hash for storage.
 """
 import hashlib
 import secrets
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import timedelta
+
 from jose import JWTError, jwt
+
 from config import settings
 from utils.time import utc_now
 
@@ -31,7 +32,7 @@ def create_access_token(subject: str, role: str, extra: dict = None) -> str:
     return jwt.encode(payload, settings.effective_secret_key, algorithm=ALGORITHM)
 
 
-def decode_access_token(token: str) -> Optional[dict]:
+def decode_access_token(token: str) -> dict | None:
     """Decode and validate a JWT. Returns payload or None if invalid/expired."""
     try:
         payload = jwt.decode(token, settings.effective_secret_key, algorithms=[ALGORITHM])

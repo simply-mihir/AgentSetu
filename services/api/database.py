@@ -8,7 +8,9 @@ Phase 11 hardening:
 - Session auto-rollback on exception
 """
 import logging
-from sqlmodel import SQLModel, create_engine, Session
+
+from sqlmodel import Session, SQLModel, create_engine
+
 from config import settings
 
 logger = logging.getLogger(__name__)

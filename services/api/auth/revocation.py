@@ -8,7 +8,6 @@ In multi-process deployments (gunicorn workers, multiple pods), the Redis
 store ensures a JTI revoked in one process is seen by all others.
 """
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

@@ -1,16 +1,29 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Loader2, ShoppingBag, ArrowRight, ChevronRight, History } from 'lucide-react'
+import { Send, Loader2, ArrowRight, History, Sparkles, Package, Shield, Settings } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { transactionsApi, paymentsApi, extractErrorMessage, type Product, type IntentResponse } from '@/lib/api'
-import Nav from '@/components/ui/Nav'
+import { useAuth } from '@/lib/auth'
 import MerchantCard from '@/components/buyer/MerchantCard'
 import ApprovalSheet from '@/components/buyer/ApprovalSheet'
 import PaymentStatus from '@/components/buyer/PaymentStatus'
 import ConstraintChips from '@/components/buyer/ConstraintChips'
+import AmbientBackground from '@/components/ui/AmbientBackground'
+import AgentComposer from '@/components/ui/AgentComposer'
+
+const AgentSetuOrb = dynamic(() => import('@/components/agent/AgentSetuOrb'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-[160px] h-[160px] flex items-center justify-center">
+      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[var(--green-200)] to-[var(--teal-200)] opacity-25 animate-pulse" />
+    </div>
+  ),
+})
 
 type Step = 'idle' | 'parsing' | 'discovering' | 'comparing' | 'selecting' | 'policy' | 'approving' | 'paying' | 'done' | 'failed'
 
@@ -23,13 +36,38 @@ interface ChatMessage {
 }
 
 const QUICK_INTENTS = [
-  '🍯 Buy organic honey under ₹500, deliver in 2 days',
-  '📦 Find turmeric powder under ₹200',
-  '💻 USB-C cable under ₹400',
-  '🌶️ Garam masala under ₹200, deliver in 3 days',
+  { emoji: '🍯', label: 'Best price', text: 'Buy organic honey under ₹500, deliver in 2 days' },
+  { emoji: '🛒', label: 'Groceries', text: 'Find turmeric powder under ₹200' },
+  { emoji: '📦', label: 'Under ₹500', text: 'USB-C cable under ₹400' },
+  { emoji: '🚀', label: 'Fast delivery', text: 'Garam masala under ₹200, deliver in 3 days' },
 ]
 
-export default function BuyerPage() {
+const STEP_TO_ORB: Record<Step, 'idle' | 'thinking' | 'processing' | 'success' | 'error' | 'payment' | 'approval'> = {
+  idle: 'idle',
+  parsing: 'thinking',
+  discovering: 'processing',
+  comparing: 'idle',
+  selecting: 'processing',
+  policy: 'processing',
+  approving: 'approval',
+  paying: 'payment',
+  done: 'success',
+  failed: 'error',
+}
+
+/* ── Rail icons ─────────────────────────────────────────────── */
+const railItems = [
+  { icon: Sparkles, label: 'AI', href: '/buyer', active: true },
+  { icon: Package, label: 'Orders', href: '/buyer/orders', active: false },
+  { icon: Shield, label: 'Policy', href: '/merchant/policy', active: false },
+  { icon: Settings, label: 'Settings', href: '/merchant', active: false },
+]
+
+function BuyerContent() {
+  const { user, isDemoMode } = useAuth()
+  const searchParams = useSearchParams()
+  const initialIntent = searchParams.get('intent')
+
   const [input, setInput] = useState('')
   const [step, setStep] = useState<Step>('idle')
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -39,13 +77,22 @@ export default function BuyerPage() {
   const [paymentResult, setPaymentResult] = useState<any>(null)
   const [currentTxnId, setCurrentTxnId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const processedIntent = useRef(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
   useEffect(() => { scrollToBottom() }, [messages])
+
+  // Process initial intent from landing page
+  useEffect(() => {
+    if (initialIntent && !processedIntent.current) {
+      processedIntent.current = true
+      handleSubmit(initialIntent)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialIntent])
 
   const addMessage = (role: 'user' | 'agent', content: string, data?: any) => {
     setMessages(prev => [...prev, {
@@ -58,7 +105,7 @@ export default function BuyerPage() {
   }
 
   const handleSubmit = async (text?: string) => {
-    const query = text || input.trim()
+    const query = typeof text === 'string' ? text : input.trim()
     if (!query || step !== 'idle') return
 
     setInput('')
@@ -66,16 +113,14 @@ export default function BuyerPage() {
     setStep('parsing')
 
     try {
-      // ── Parse intent + discover + rank ─────────────────────────────────────
-      addMessage('agent', '🔍 Checking merchants across the registry…')
+      addMessage('agent', 'Searching merchants across the registry…')
       setStep('discovering')
 
       const result = await transactionsApi.processIntent(query)
       setIntentResult(result)
       setCurrentTxnId(result.transaction_id)
 
-      // Remove the loading message
-      setMessages(prev => prev.filter(m => m.content !== '🔍 Checking merchants across the registry…'))
+      setMessages(prev => prev.filter(m => m.content !== 'Searching merchants across the registry…'))
 
       if (result.no_results || result.candidates.length === 0) {
         addMessage('agent',
@@ -97,7 +142,7 @@ export default function BuyerPage() {
     } catch (err: any) {
       const msg = extractErrorMessage(err, 'Failed to process your request.')
       toast.error(msg)
-      addMessage('agent', `⚠️ ${msg}`)
+      addMessage('agent', msg)
       setStep('idle')
     }
   }
@@ -108,10 +153,8 @@ export default function BuyerPage() {
     setStep('policy')
 
     try {
-      // Select product
       await transactionsApi.select(currentTxnId, product.product_id, product.merchant_id!)
 
-      // Evaluate policy
       const policy = await transactionsApi.evaluatePolicy({
         merchant_id: product.merchant_id!,
         product_id: product.product_id,
@@ -120,28 +163,27 @@ export default function BuyerPage() {
       setPolicyResult(policy)
 
       if (policy.is_denied) {
-        addMessage('agent', `❌ ${policy.message}`, { type: 'denied', policy })
+        addMessage('agent', policy.message, { type: 'denied', policy })
         setStep('idle')
         return
       }
 
       if (policy.needs_approval) {
         addMessage('agent',
-          `⚠️ This transaction (₹${product.price_inr}) exceeds the autonomous limit of ₹${policy.requires_approval_above}. Your approval is required to proceed.`,
+          `This transaction (₹${product.price_inr}) exceeds the autonomous limit of ₹${policy.requires_approval_above}. Your approval is required to proceed.`,
           { type: 'needs_approval', product, policy }
         )
         setStep('approving')
         return
       }
 
-      // Auto-approved
       setStep('paying')
       await handleCreatePayment(false)
 
     } catch (err: any) {
       const msg = extractErrorMessage(err, 'Policy evaluation failed.')
       toast.error(msg)
-      addMessage('agent', `⚠️ ${msg}`)
+      addMessage('agent', msg)
       setStep('idle')
     }
   }
@@ -152,7 +194,7 @@ export default function BuyerPage() {
 
     try {
       await transactionsApi.approve(currentTxnId)
-      addMessage('agent', '✅ Your approval has been recorded. Creating payment link…')
+      addMessage('agent', 'Your approval has been recorded. Creating payment link…')
       await handleCreatePayment(true)
     } catch (err) {
       const msg = extractErrorMessage(err, 'Approval failed.')
@@ -169,12 +211,12 @@ export default function BuyerPage() {
       setPaymentResult(payment)
 
       if (payment.needs_approval) {
-        addMessage('agent', `⚠️ ${payment.message}`, { type: 'needs_approval' })
+        addMessage('agent', payment.message, { type: 'needs_approval' })
         setStep('approving')
         return
       }
 
-      addMessage('agent', `🔗 Payment link created! Complete your purchase securely.`, {
+      addMessage('agent', 'Payment link created. Complete your purchase securely.', {
         type: 'payment_ready',
         payment,
         product: selectedProduct,
@@ -184,10 +226,10 @@ export default function BuyerPage() {
     } catch (err: any) {
       const detail = err.response?.data?.detail
       if (typeof detail === 'object' && detail?.blocked) {
-        addMessage('agent', `🚫 Payment blocked: ${detail.reason}`, { type: 'blocked', detail })
+        addMessage('agent', `Payment blocked: ${detail.reason}`, { type: 'blocked', detail })
       } else if (typeof detail === 'object' && detail?.payment_failed) {
         addMessage('agent',
-          '⚠️ Payment did not complete. I have not retried — your transaction is held safely.',
+          'Payment did not complete. Your transaction is held safely — no retry has been attempted.',
           { type: 'payment_failed' }
         )
       } else {
@@ -204,225 +246,359 @@ export default function BuyerPage() {
     setPolicyResult(null)
     setPaymentResult(null)
     setCurrentTxnId(null)
-    setTimeout(() => inputRef.current?.focus(), 100)
+    setMessages([])
   }
 
   const isLoading = ['parsing', 'discovering', 'policy', 'paying'].includes(step)
+  const orbStatus = STEP_TO_ORB[step]
+  const hasMessages = messages.length > 0
+
+  // Greeting
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const userName = user?.display_name?.split(' ')[0] || 'there'
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Nav active="buyer" />
+    <div className="h-screen flex flex-col overflow-hidden relative">
+      {/* Demo mode banner */}
+      {isDemoMode && (
+        <div className="flex-shrink-0 bg-gradient-to-r from-[var(--sea-green)] to-[var(--mint)] text-white text-center text-xs py-1.5 px-4 flex items-center justify-center gap-3 relative z-50">
+          <span>🎮 Demo Mode — one-time access</span>
+          <Link href="/auth" className="underline font-semibold">Sign up for full access →</Link>
+        </div>
+      )}
+      <div className="flex-1 flex overflow-hidden relative">
+      <AmbientBackground variant="subtle" />
 
-      <div className="flex-1 max-w-4xl mx-auto w-full px-4 py-6 flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-white">AI Buyer</h1>
-            <p className="text-text-muted text-sm">State your intent in natural language</p>
+      {/* ═══ LEFT RAIL ═══ */}
+      <aside className="hidden lg:flex flex-col items-center py-6 px-3 gap-1 relative z-20 w-16">
+        <Link href="/" className="mb-6">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[var(--mint)] to-[var(--sea-green)] flex items-center justify-center shadow-sm">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="5" fill="white" opacity="0.9"/>
+              <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="1.5" opacity="0.5"/>
+              <circle cx="12" cy="12" r="11.5" stroke="white" strokeWidth="1" opacity="0.25"/>
+            </svg>
           </div>
-          <div className="flex gap-2">
-            <Link href="/buyer/orders" className="btn-ghost text-sm py-2 px-4">
-              <History size={14} /> Orders
+        </Link>
+
+        {railItems.map(item => {
+          const Icon = item.icon
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={`
+                group relative w-10 h-10 flex items-center justify-center
+                rounded-xl transition-all duration-200
+                ${item.active
+                  ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)]'
+                }
+              `}
+              title={item.label}
+            >
+              <Icon size={18} />
+              <span className="absolute left-14 px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--border)] shadow-md text-[10px] font-medium text-[var(--text-primary)] opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap">
+                {item.label}
+              </span>
             </Link>
-            {(step !== 'idle' || messages.length > 0) && (
-              <button onClick={handleReset} className="btn-ghost text-sm py-2 px-4">
-                New Purchase
+          )
+        })}
+      </aside>
+
+      {/* ═══ MAIN ═══ */}
+      <main className="flex-1 flex flex-col min-w-0 relative z-10">
+        {/* ── Header ─────────────────────────────────────────── */}
+        <header className="flex items-center justify-between px-6 lg:px-8 py-4 relative z-20">
+          {/* Mobile logo */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <Link href="/" className="w-8 h-8 rounded-xl bg-gradient-to-br from-[var(--mint)] to-[var(--sea-green)] flex items-center justify-center shadow-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="5" fill="white" opacity="0.9"/>
+                <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="1.5" opacity="0.5"/>
+              </svg>
+            </Link>
+            <span className="font-bold text-sm text-[var(--text-primary)]">AgentSetu</span>
+          </div>
+
+          {/* Status */}
+          <div className="hidden lg:flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-[var(--success)] animate-pulse" />
+            <span className="text-xs text-[var(--text-muted)] font-medium">Agent online</span>
+          </div>
+
+          {/* Right */}
+          <div className="flex items-center gap-2">
+            <Link href="/buyer/orders" className="btn-ghost text-xs py-2 px-3 rounded-xl">
+              <History size={13} /> Orders
+            </Link>
+            {hasMessages && (
+              <button onClick={handleReset} className="btn-ghost text-xs py-2 px-3 rounded-xl">
+                New
               </button>
             )}
           </div>
-        </div>
+        </header>
 
-        {/* Messages */}
-        <div className="flex-1 flex flex-col gap-4 min-h-[400px]">
-          {messages.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex-1 flex flex-col items-center justify-center gap-6 py-12"
-            >
-              <div className="text-5xl">🛒</div>
-              <p className="text-text-secondary text-center max-w-sm">
-                Tell me what you want to buy — I'll find the best options and handle the payment safely.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
-                {QUICK_INTENTS.map(q => (
-                  <button
-                    key={q}
-                    onClick={() => handleSubmit(q.replace(/^[^\s]+\s/, ''))}
-                    className="glass-card p-3 text-left text-sm text-text-secondary hover:text-white transition-colors text-xs"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
+        {/* ── Content area ───────────────────────────────────── */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-6 lg:px-8">
+            <div className="max-w-2xl mx-auto w-full">
+              {/* ── Empty state: orb + greeting + quick actions ─── */}
+              {!hasMessages && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-col items-center justify-center pt-8 lg:pt-16 pb-8"
+                >
+                  <AgentSetuOrb variant="compact" status={orbStatus} />
 
-          <AnimatePresence initial={false}>
-            {messages.map((msg) => (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`max-w-[85%] ${msg.role === 'user' ? 'w-auto' : 'w-full'}`}>
-                  {/* User message */}
-                  {msg.role === 'user' && (
-                    <div className="bg-primary/20 border border-primary/25 rounded-2xl rounded-br-sm px-4 py-3 text-sm text-white">
-                      {msg.content}
+                  <div className="text-center mt-4 mb-6">
+                    <h2 className="text-xl font-bold text-[var(--text-primary)] mb-1">
+                      {greeting}, {userName}.
+                    </h2>
+                    <p className="text-sm text-[var(--text-muted)]">
+                      What would you like me to find?
+                    </p>
+                  </div>
+
+                  {/* Quick chips */}
+                  <div className="flex flex-wrap gap-2 justify-center max-w-md">
+                    {QUICK_INTENTS.map(q => (
+                      <button
+                        key={q.label}
+                        onClick={() => handleSubmit(q.text)}
+                        className="
+                          flex items-center gap-1.5 px-4 py-2
+                          bg-[var(--surface)] border border-[var(--border)]
+                          rounded-full text-xs font-medium text-[var(--text-secondary)]
+                          hover:border-[var(--accent)]/30 hover:text-[var(--accent)]
+                          hover:bg-[var(--accent-soft)] hover:shadow-sm
+                          transition-all duration-200
+                        "
+                      >
+                        <span>{q.emoji}</span>
+                        <span>{q.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ── Chat messages ─────────────────────────────────── */}
+              {hasMessages && (
+                <div className="py-6 space-y-5">
+                  {/* Small orb status indicator when chatting */}
+                  <div className="flex justify-center mb-2">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--surface-soft)] border border-[var(--border)]">
+                      <div className={`w-2 h-2 rounded-full ${
+                        isLoading ? 'bg-[var(--teal-400)] animate-pulse' :
+                        step === 'done' ? 'bg-[var(--success)]' :
+                        step === 'failed' ? 'bg-[var(--danger)]' :
+                        'bg-[var(--accent)]'
+                      }`} />
+                      <span className="text-[10px] text-[var(--text-muted)] font-medium">
+                        {isLoading ? 'Processing…' :
+                         step === 'done' ? 'Complete' :
+                         step === 'failed' ? 'Failed' :
+                         step === 'approving' ? 'Awaiting approval' :
+                         'Ready'}
+                      </span>
                     </div>
-                  )}
+                  </div>
 
-                  {/* Agent message */}
-                  {msg.role === 'agent' && (
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-2">
-                        <div className="w-6 h-6 rounded-full bg-agent/20 border border-agent/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-xs">⚡</span>
+                  <AnimatePresence initial={false}>
+                    {messages.map((msg) => (
+                      <motion.div
+                        key={msg.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div className={`max-w-[90%] ${msg.role === 'user' ? 'w-auto' : 'w-full'}`}>
+                          {/* User message */}
+                          {msg.role === 'user' && (
+                            <div className="
+                              bg-gradient-to-r from-[var(--accent-soft)] to-[var(--green-50)]
+                              border border-[var(--accent)]/10
+                              rounded-2xl rounded-br-md px-4 py-3
+                              text-sm text-[var(--text-primary)]
+                            ">
+                              {msg.content}
+                            </div>
+                          )}
+
+                          {/* Agent message */}
+                          {msg.role === 'agent' && (
+                            <div className="space-y-3">
+                              <div className="flex items-start gap-2.5">
+                                <div className="
+                                  w-7 h-7 rounded-full flex-shrink-0 mt-0.5
+                                  bg-gradient-to-br from-[var(--green-200)] to-[var(--teal-200)]
+                                  flex items-center justify-center shadow-sm
+                                ">
+                                  <Sparkles size={11} className="text-[var(--accent)]" />
+                                </div>
+                                <div className="
+                                  bg-[var(--surface)] border border-[var(--border)]
+                                  rounded-2xl rounded-bl-md px-4 py-3
+                                  text-sm text-[var(--text-secondary)] flex-1
+                                  shadow-xs
+                                ">
+                                  {msg.content}
+                                </div>
+                              </div>
+
+                              {/* Constraint chips */}
+                              {msg.data?.type === 'candidates' && msg.data?.constraints && (
+                                <div className="ml-9">
+                                  <ConstraintChips constraints={msg.data.constraints} />
+                                </div>
+                              )}
+
+                              {/* Product candidates */}
+                              {msg.data?.type === 'candidates' && msg.data?.candidates && (
+                                <div className="ml-9 space-y-3">
+                                  {msg.data.candidates.slice(0, 3).map((p: Product, i: number) => (
+                                    <MerchantCard
+                                      key={p.product_id}
+                                      product={p}
+                                      rank={i}
+                                      isBest={i === 0}
+                                      disabled={step !== 'comparing'}
+                                      onSelect={handleSelectProduct}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Approval sheet */}
+                              {msg.data?.type === 'needs_approval' && step === 'approving' && (
+                                <div className="ml-9">
+                                  <ApprovalSheet
+                                    product={selectedProduct!}
+                                    policyResult={policyResult}
+                                    onApprove={handleApprove}
+                                    onCancel={() => {
+                                      addMessage('agent', 'Transaction cancelled. No payment was attempted.')
+                                      setStep('idle')
+                                    }}
+                                  />
+                                </div>
+                              )}
+
+                              {/* Payment ready */}
+                              {msg.data?.type === 'payment_ready' && (
+                                <div className="ml-9">
+                                  <PaymentStatus
+                                    payment={msg.data.payment}
+                                    product={msg.data.product}
+                                    transactionId={currentTxnId!}
+                                    onVerify={async () => {
+                                      try {
+                                        const res = await paymentsApi.verify(currentTxnId!)
+                                        addMessage('agent',
+                                          res.state === 'RECEIPT_ISSUED'
+                                            ? 'Payment confirmed! Your receipt is ready.'
+                                            : res.recovery_message || 'Payment state updated.',
+                                          { type: 'verified', result: res }
+                                        )
+                                      } catch { toast.error('Verification failed') }
+                                    }}
+                                  />
+                                </div>
+                              )}
+
+                              {/* Policy denied */}
+                              {msg.data?.type === 'denied' && (
+                                <div className="ml-9 p-4 rounded-2xl border border-[var(--danger)]/20 bg-[var(--danger-bg)]">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="chip chip-danger">Blocked</span>
+                                    <span className="text-xs text-[var(--text-muted)]">Policy engine decision</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {msg.data.policy?.reason_codes?.map((code: string) => (
+                                      <span key={code} className="text-xs bg-[var(--danger-bg)] text-[var(--danger)] border border-[var(--danger-border)] rounded-lg px-2 py-0.5 font-mono">
+                                        {code}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Receipt link */}
+                              {msg.data?.type === 'verified' && msg.data?.result?.receipt && (
+                                <div className="ml-9">
+                                  <Link
+                                    href={`/buyer/receipt?txn=${currentTxnId}`}
+                                    className="btn-trust text-sm py-2 px-4 rounded-xl"
+                                  >
+                                    View Receipt <ArrowRight size={14} />
+                                  </Link>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="glass-card px-4 py-3 text-sm text-text-secondary flex-1">
-                          {msg.content}
-                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+
+                  {/* Loading indicator */}
+                  {isLoading && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex items-center gap-3 ml-9"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--green-200)] to-[var(--teal-200)] flex items-center justify-center shadow-sm">
+                        <Loader2 size={11} className="animate-spin text-[var(--accent)]" />
                       </div>
-
-                      {/* Constraint chips */}
-                      {msg.data?.type === 'candidates' && msg.data?.constraints && (
-                        <div className="ml-8">
-                          <ConstraintChips constraints={msg.data.constraints} />
-                        </div>
-                      )}
-
-                      {/* Product candidates */}
-                      {msg.data?.type === 'candidates' && msg.data?.candidates && (
-                        <div className="ml-8 space-y-3">
-                          {msg.data.candidates.slice(0, 3).map((p: Product, i: number) => (
-                            <MerchantCard
-                              key={p.product_id}
-                              product={p}
-                              rank={i}
-                              isBest={i === 0}
-                              disabled={step !== 'comparing'}
-                              onSelect={handleSelectProduct}
-                            />
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Approval sheet */}
-                      {msg.data?.type === 'needs_approval' && step === 'approving' && (
-                        <div className="ml-8">
-                          <ApprovalSheet
-                            product={selectedProduct!}
-                            policyResult={policyResult}
-                            onApprove={handleApprove}
-                            onCancel={() => {
-                              addMessage('agent', 'Transaction cancelled. No payment was attempted.')
-                              setStep('idle')
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      {/* Payment ready */}
-                      {msg.data?.type === 'payment_ready' && (
-                        <div className="ml-8">
-                          <PaymentStatus
-                            payment={msg.data.payment}
-                            product={msg.data.product}
-                            transactionId={currentTxnId!}
-                            onVerify={async () => {
-                              try {
-                                const res = await paymentsApi.verify(currentTxnId!)
-                                addMessage('agent',
-                                  res.state === 'RECEIPT_ISSUED'
-                                    ? '✅ Payment confirmed! Your receipt is ready.'
-                                    : res.recovery_message || 'Payment state updated.',
-                                  { type: 'verified', result: res }
-                                )
-                              } catch { toast.error('Verification failed') }
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      {/* Policy denied */}
-                      {msg.data?.type === 'denied' && (
-                        <div className="ml-8 glass-card p-4 border-danger/30">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="chip-danger">Blocked</span>
-                            <span className="text-xs text-text-muted">Policy engine decision</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {msg.data.policy?.reason_codes?.map((code: string) => (
-                              <span key={code} className="text-xs bg-danger/10 text-danger border border-danger/20 rounded px-2 py-0.5 font-mono">
-                                {code}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Receipt */}
-                      {msg.data?.type === 'verified' && msg.data?.result?.receipt && (
-                        <div className="ml-8">
-                          <Link
-                            href={`/buyer/receipt?txn=${currentTxnId}`}
-                            className="btn-trust text-sm py-2 px-4"
-                          >
-                            View Receipt <ArrowRight size={14} />
-                          </Link>
-                        </div>
-                      )}
-                    </div>
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {step === 'parsing' ? 'Parsing your intent…' :
+                         step === 'discovering' ? 'Searching merchants…' :
+                         step === 'policy' ? 'Evaluating policy…' :
+                         'Creating payment link…'}
+                      </span>
+                    </motion.div>
                   )}
+
+                  <div ref={messagesEndRef} />
                 </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+              )}
+            </div>
+          </div>
 
-          {/* Loading indicator */}
-          {isLoading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-center gap-2 text-text-muted text-sm pl-8"
-            >
-              <Loader2 size={14} className="animate-spin text-agent" />
-              <span>
-                {step === 'parsing' ? 'Parsing your intent…' :
-                 step === 'discovering' ? 'Searching merchants…' :
-                 step === 'policy' ? 'Evaluating policy…' :
-                 'Creating payment link…'}
-              </span>
-            </motion.div>
-          )}
-
-          <div ref={messagesEndRef} />
+          {/* ── Bottom composer ───────────────────────────────── */}
+          <div className="px-6 lg:px-8 pb-5 pt-3 relative z-10">
+            <div className="max-w-2xl mx-auto">
+              <AgentComposer
+                onSubmit={handleSubmit}
+                showQuickActions={false}
+                placeholder="What would you like to buy?"
+                disabled={isLoading || step === 'approving'}
+                loading={isLoading}
+                autoFocus={!initialIntent}
+              />
+            </div>
+          </div>
         </div>
-
-        {/* Input */}
-        <div className="glass-card p-2 flex items-center gap-2">
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSubmit()}
-            placeholder="What would you like to buy? (e.g. organic honey under ₹500, deliver in 2 days)"
-            className="glass-input border-0 bg-transparent rounded-xl flex-1 text-sm"
-            disabled={isLoading || step === 'approving'}
-            autoFocus
-          />
-          <button
-            onClick={() => handleSubmit()}
-            disabled={!input.trim() || isLoading || step === 'approving'}
-            className="btn-primary py-2.5 px-4 rounded-xl"
-          >
-            {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          </button>
-        </div>
-      </div>
+      </main>
     </div>
+    </div>
+  )
+}
+
+export default function BuyerPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
+        <Loader2 className="animate-spin text-[var(--accent)]" size={24} />
+      </div>
+    }>
+      <BuyerContent />
+    </Suspense>
   )
 }

@@ -2,8 +2,8 @@
 Application configuration — loaded from environment variables.
 Never hard-code secrets. Use .env for local dev, managed secrets in production.
 """
+
 from pydantic_settings import BaseSettings
-from typing import List
 
 
 class Settings(BaseSettings):
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     # ── Derived ──────────────────────────────────────────────────────────────
     @property
-    def cors_origins_list(self) -> List[str]:
+    def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
@@ -94,7 +94,7 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must be set in production")
         return "dev-only-insecure-key-change-before-prod"
 
-    def validate_production(self) -> List[str]:
+    def validate_production(self) -> list[str]:
         """Return list of missing required production config."""
         issues = []
         if not self.secret_key:

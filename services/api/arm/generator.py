@@ -3,14 +3,13 @@
 L1 FIX: TTL-based caching — cached ARM is returned if it was generated
 within the last ARM_CACHE_TTL_SECONDS and its content hash hasn't changed.
 """
-import json
 import logging
-from datetime import timedelta
-from typing import Optional
+
 from sqlmodel import Session, select
-from utils.time import utc_now
+
+from arm.schema import ARMManifest, ARMMerchant, ARMPolicies, ARMProduct
 from models.merchant import Merchant, Product
-from arm.schema import ARMManifest, ARMMerchant, ARMProduct, ARMPolicies
+from utils.time import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +63,7 @@ def get_or_generate_arm(
     merchant_id: str,
     session: Session,
     force_refresh: bool = False,
-) -> Optional[ARMManifest]:
+) -> ARMManifest | None:
     """Return cached ARM if fresh, otherwise regenerate.
 
     L1 FIX: TTL-based read-back — if the cached ARM was generated within
@@ -82,7 +81,7 @@ def get_or_generate_arm(
         try:
             cached = ARMManifest.model_validate_json(merchant.arm_json)
             # Check TTL — generated_at is ISO format with trailing Z
-            from datetime import datetime, timezone
+            from datetime import datetime
             generated_at = datetime.fromisoformat(cached.generated_at.rstrip("Z")).replace(tzinfo=None)
             age = (utc_now() - generated_at).total_seconds()
             if age < ARM_CACHE_TTL_SECONDS:

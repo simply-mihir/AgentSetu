@@ -2,8 +2,9 @@
 Consistent error response structure.
 Every API error returns: {"error": {"code": "...", "message": "...", "request_id": "...", "details": {}}}
 """
-from fastapi.responses import JSONResponse
 import uuid
+
+from fastapi.responses import JSONResponse
 
 
 def make_error(code: str, message: str, status_code: int, details: dict = None, request_id: str = None) -> JSONResponse:

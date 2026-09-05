@@ -1,10 +1,11 @@
 """WebhookEvent model — idempotent event store for all incoming provider webhooks."""
-from sqlmodel import SQLModel, Field
-from sqlalchemy import UniqueConstraint
-from typing import Optional
+import uuid
 from datetime import datetime
 from enum import Enum
-import uuid
+
+from sqlalchemy import UniqueConstraint
+from sqlmodel import Field, SQLModel
+
 from utils.time import utc_now
 
 
@@ -23,7 +24,7 @@ class WebhookEvent(SQLModel, table=True):
         UniqueConstraint("provider", "provider_event_id", name="uq_webhook_provider_event"),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     webhook_id: str = Field(
         default_factory=lambda: f"wh_{uuid.uuid4().hex[:12]}",
         unique=True,
@@ -37,11 +38,11 @@ class WebhookEvent(SQLModel, table=True):
 
     signature_valid: bool = False
     processing_status: str = "RECEIVED"
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     # Correlation
-    transaction_id: Optional[str] = Field(default=None, index=True)
-    payment_link_id: Optional[str] = None
+    transaction_id: str | None = Field(default=None, index=True)
+    payment_link_id: str | None = None
 
     received_at: datetime = Field(default_factory=utc_now)
-    processed_at: Optional[datetime] = None
+    processed_at: datetime | None = None

@@ -1,8 +1,9 @@
 """Idempotency-Key support — prevents duplicate side-effects from retried requests."""
-from sqlmodel import SQLModel, Field
-from sqlalchemy import UniqueConstraint
-from typing import Optional
 from datetime import datetime
+
+from sqlalchemy import UniqueConstraint
+from sqlmodel import Field, SQLModel
+
 from utils.time import utc_now
 
 
@@ -12,7 +13,7 @@ class IdempotencyRecord(SQLModel, table=True):
         UniqueConstraint("idempotency_key", name="uq_idempotency_key"),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     idempotency_key: str = Field(index=True)
     endpoint: str                          # e.g. "POST /v1/payments/payment-link"
     user_id: str                           # scoped per user
@@ -21,4 +22,4 @@ class IdempotencyRecord(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
 
     # Auto-expire after 24h for cleanup (enforced in query, not TTL)
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None

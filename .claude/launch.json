@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "agentsetu-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--package=next@14.2.16", "next", "dev", "-p", "3001"],
+      "port": 3001,
+      "autoPort": false
+    }
+  ]
+}

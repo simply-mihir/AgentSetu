@@ -13,26 +13,27 @@ import logging
 import os
 import uuid
 from datetime import timedelta
-from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from passlib.context import CryptContext
 from pydantic import BaseModel
-from sqlmodel import Session, select
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from passlib.context import CryptContext
+from sqlmodel import Session, select
 
-from database import get_session
-from models.user import User, BuyerProfile, UserRole, UserStatus
-from models.merchant_user import MerchantUser
-from models.refresh_token import RefreshToken
+from auth.dependencies import get_current_user
 from auth.jwt import (
+    REFRESH_TOKEN_EXPIRY_DAYS,
     create_access_token,
     generate_refresh_token,
     hash_refresh_token,
-    REFRESH_TOKEN_EXPIRY_DAYS,
 )
-from auth.dependencies import get_current_user
+from auth.revocation import is_revoked, revoke_jti
+from database import get_session
+from models.merchant_user import MerchantUser
+from models.refresh_token import RefreshToken
+from models.user import BuyerProfile, User, UserRole, UserStatus
 from utils.time import utc_now
 
 router = APIRouter()
@@ -42,8 +43,6 @@ _testing = os.environ.get("TESTING", "").lower() in ("1", "true")
 limiter = Limiter(key_func=get_remote_address, enabled=not _testing)
 
 # N4 FIX: Redis-backed JTI revocation (falls back to in-memory if Redis unavailable)
-from auth.revocation import revoke_jti, is_revoked
-
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
@@ -65,7 +64,7 @@ class RefreshRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    refresh_token: Optional[str] = None
+    refresh_token: str | None = None
     token_type: str = "bearer"
     user_id: str
     role: str
@@ -111,7 +110,7 @@ def _revoke_token_family(session: Session, family_id: str) -> int:
     tokens = session.exec(
         select(RefreshToken).where(
             RefreshToken.family_id == family_id,
-            RefreshToken.is_revoked == False,  # noqa: E712
+            RefreshToken.is_revoked.is_(False),
         )
     ).all()
     now = utc_now()
@@ -244,7 +243,7 @@ async def logout(
     active_rts = session.exec(
         select(RefreshToken).where(
             RefreshToken.user_id == user.user_id,
-            RefreshToken.is_revoked == False,  # noqa: E712
+            RefreshToken.is_revoked.is_(False),
         )
     ).all()
     for rt in active_rts:

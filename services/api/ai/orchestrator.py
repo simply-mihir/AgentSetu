@@ -10,8 +10,9 @@ Phase 13 hardening:
 """
 import json
 import logging
-from typing import List
+
 from openai import OpenAI
+
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -149,7 +150,7 @@ Rules:
 
     def generate_comparison(
         self,
-        candidates: List[dict],
+        candidates: list[dict],
         constraints: dict,
         selected_product: dict,
     ) -> str:
@@ -202,7 +203,7 @@ Cite price, delivery time, rating, and any relevant quality aspects.
         self,
         failure_reason: str,
         transaction: dict,
-        alternative_products: List[dict],
+        alternative_products: list[dict],
     ) -> str:
         """Generate a safe recovery suggestion after a payment failure.
 
@@ -245,9 +246,9 @@ Suggest a safe recovery action in 2-3 sentences.
 
     def score_candidates(
         self,
-        candidates: List[dict],
+        candidates: list[dict],
         constraints: dict,
-    ) -> List[dict]:
+    ) -> list[dict]:
         """
         Deterministic scoring of candidates.
         score = 0.45 * price_score + 0.25 * delivery_score + 0.20 * rating_score + 0.10 * policy_fit

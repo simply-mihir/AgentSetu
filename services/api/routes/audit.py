@@ -7,16 +7,17 @@ SECURITY (C4 fix): All endpoints require authentication.
 - PLATFORM_ADMIN sees all events.
 """
 import json
+
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 
-from database import get_session
-from models.audit import AuditEvent
-from models.user import User, UserRole
-from models.transaction import Transaction
-from models.merchant_user import MerchantUser
 from audit.service import audit_service
 from auth.dependencies import get_current_user
+from database import get_session
+from models.audit import AuditEvent
+from models.merchant_user import MerchantUser
+from models.transaction import Transaction
+from models.user import User, UserRole
 
 router = APIRouter()
 

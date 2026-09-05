@@ -14,12 +14,12 @@ Rules:
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import timedelta
+
 from sqlmodel import Session, select
-from utils.time import utc_now
 
 from models.capability import AuthorizationCapability, CapabilityStatus
+from utils.time import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +49,8 @@ class CapabilityService:
         merchant_id: str,
         product_id: str,
         amount_inr: int,
-        approval_id: Optional[str] = None,
-        buyer_id: Optional[str] = None,
+        approval_id: str | None = None,
+        buyer_id: str | None = None,
         ttl_minutes: int = CAPABILITY_TTL_MINUTES,
     ) -> AuthorizationCapability:
         """
@@ -140,7 +140,7 @@ class CapabilityService:
         transaction_id: str,
         merchant_id: str,
         amount_inr: int,
-        buyer_id: Optional[str] = None,
+        buyer_id: str | None = None,
     ) -> tuple[bool, str]:
         """
         Validate and atomically consume a capability.

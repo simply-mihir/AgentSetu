@@ -1,9 +1,10 @@
 """User and BuyerProfile models."""
-from sqlmodel import SQLModel, Field
-from typing import Optional
+import uuid
 from datetime import datetime
 from enum import Enum
-import uuid
+
+from sqlmodel import Field, SQLModel
+
 from utils.time import utc_now
 
 
@@ -24,7 +25,7 @@ class UserStatus(str, Enum):
 class User(SQLModel, table=True):
     __tablename__ = "users"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: str = Field(
         default_factory=lambda: f"usr_{uuid.uuid4().hex[:12]}",
         unique=True,
@@ -43,7 +44,7 @@ class User(SQLModel, table=True):
 class BuyerProfile(SQLModel, table=True):
     __tablename__ = "buyer_profiles"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: str = Field(foreign_key="users.user_id", unique=True, index=True)
 
     # Spending limits

@@ -1,3 +1,3 @@
-from .engine import PolicyEngine, PolicyResult, PolicyDecision
+from .engine import PolicyDecision, PolicyEngine, PolicyResult
 
-__all__ = ["PolicyEngine", "PolicyResult", "PolicyDecision"]
+__all__ = ["PolicyDecision", "PolicyEngine", "PolicyResult"]

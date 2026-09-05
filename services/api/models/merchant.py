@@ -1,8 +1,10 @@
-from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import UniqueConstraint
-from typing import Optional, List
-from datetime import datetime
 import json
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import UniqueConstraint
+from sqlmodel import Field, Relationship, SQLModel
+
 from utils.time import utc_now
 
 
@@ -12,7 +14,7 @@ class Product(SQLModel, table=True):
         UniqueConstraint("product_id", "merchant_id", name="uq_product_merchant"),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     product_id: str = Field(index=True)
     merchant_id: str = Field(foreign_key="merchants.merchant_id", index=True)
 
@@ -40,7 +42,7 @@ class Product(SQLModel, table=True):
 class Merchant(SQLModel, table=True):
     __tablename__ = "merchants"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     merchant_id: str = Field(unique=True, index=True)
     name: str
     currency: str = "INR"
@@ -55,20 +57,20 @@ class Merchant(SQLModel, table=True):
     refund_authority: str = "human_only"
 
     # ARM
-    arm_json: Optional[str] = None  # Full ARM manifest cached
+    arm_json: str | None = None  # Full ARM manifest cached
     arm_version: str = "arm-0.1"
     is_active: bool = True
 
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
-    products: List[Product] = Relationship(back_populates="merchant")
+    products: list[Product] = Relationship(back_populates="merchant")
 
-    def get_restricted_categories(self) -> List[str]:
+    def get_restricted_categories(self) -> list[str]:
         try:
             return json.loads(self.restricted_categories)
         except Exception:
             return []
 
-    def set_restricted_categories(self, cats: List[str]):
+    def set_restricted_categories(self, cats: list[str]):
         self.restricted_categories = json.dumps(cats)

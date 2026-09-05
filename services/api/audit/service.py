@@ -4,8 +4,9 @@ Every material agent and money action must be recorded here.
 """
 import json
 import logging
-from typing import List, Optional
+
 from sqlmodel import Session, select
+
 from models.audit import AuditEvent
 
 logger = logging.getLogger(__name__)
@@ -20,13 +21,13 @@ class AuditService:
         actor: str,
         event_type: str,
         input_summary: dict = None,
-        decision: Optional[str] = None,
-        reason_codes: List[str] = None,
-        policy_result: Optional[str] = None,
-        payment_reference: Optional[str] = None,
-        next_state: Optional[str] = None,
-        result: Optional[str] = None,
-        error_code: Optional[str] = None,
+        decision: str | None = None,
+        reason_codes: list[str] = None,
+        policy_result: str | None = None,
+        payment_reference: str | None = None,
+        next_state: str | None = None,
+        result: str | None = None,
+        error_code: str | None = None,
         metadata: dict = None,
         flush_only: bool = False,
     ) -> AuditEvent:
@@ -68,7 +69,7 @@ class AuditService:
         self,
         session: Session,
         correlation_id: str
-    ) -> List[AuditEvent]:
+    ) -> list[AuditEvent]:
         events = session.exec(
             select(AuditEvent)
             .where(AuditEvent.correlation_id == correlation_id)
@@ -80,7 +81,7 @@ class AuditService:
         self,
         session: Session,
         transaction_id: str
-    ) -> List[AuditEvent]:
+    ) -> list[AuditEvent]:
         events = session.exec(
             select(AuditEvent)
             .where(AuditEvent.transaction_id == transaction_id)
@@ -92,7 +93,7 @@ class AuditService:
         self,
         session: Session,
         limit: int = 50
-    ) -> List[AuditEvent]:
+    ) -> list[AuditEvent]:
         events = session.exec(
             select(AuditEvent)
             .order_by(AuditEvent.timestamp.desc())

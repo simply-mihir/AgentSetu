@@ -5,15 +5,16 @@ Reuse of a revoked token triggers family-wide revocation (compromise detection).
 """
 import uuid
 from datetime import datetime
-from typing import Optional
-from sqlmodel import SQLModel, Field
+
+from sqlmodel import Field, SQLModel
+
 from utils.time import utc_now
 
 
 class RefreshToken(SQLModel, table=True):
     __tablename__ = "refresh_tokens"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     token_hash: str = Field(unique=True, index=True)  # SHA-256 of the raw token
     user_id: str = Field(index=True, foreign_key="users.user_id")
 
@@ -29,4 +30,4 @@ class RefreshToken(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=utc_now)
     expires_at: datetime  # Typically 7 days from creation
-    revoked_at: Optional[datetime] = None
+    revoked_at: datetime | None = None

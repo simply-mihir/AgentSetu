@@ -3,24 +3,24 @@ FastAPI authentication dependencies.
 Import get_current_user, require_merchant_access, etc. in route handlers.
 """
 import logging
-from typing import Optional
+
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import Session, select
 
-from database import get_session
-from models.user import User, UserRole, UserStatus
-from models.merchant_user import MerchantUser
 from auth.jwt import decode_access_token
+from database import get_session
+from models.merchant_user import MerchantUser
+from models.user import User, UserRole, UserStatus
 
 logger = logging.getLogger(__name__)
 bearer = HTTPBearer(auto_error=False)
 
 
 def _get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     session: Session = Depends(get_session),
-) -> Optional[User]:
+) -> User | None:
     """Returns the authenticated User or None (does not raise)."""
     if not credentials:
         return None
@@ -43,7 +43,7 @@ def _get_optional_user(
 
 
 def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     session: Session = Depends(get_session),
 ) -> User:
     """Raises 401 if not authenticated."""
@@ -58,9 +58,9 @@ def get_current_user(
 
 
 def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     session: Session = Depends(get_session),
-) -> Optional[User]:
+) -> User | None:
     """Returns User or None — for endpoints that work both authenticated and anonymous."""
     return _get_optional_user(credentials, session)
 

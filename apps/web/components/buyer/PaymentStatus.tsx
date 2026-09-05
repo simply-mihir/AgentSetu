@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { ExternalLink, RefreshCw, CheckCircle2, Lock } from 'lucide-react'
+import { ExternalLink, RefreshCw, CheckCircle2, Lock, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
 
@@ -24,20 +24,25 @@ export default function PaymentStatus({ payment, product, transactionId, onVerif
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-card p-5 border-trust/20 bg-trust/5"
+      className="neo-card p-6 border-[var(--success)]/20 bg-[var(--success-bg)]"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <CheckCircle2 className="text-trust" size={20} />
-        <span className="font-semibold text-white">Payment Link Ready</span>
-        <span className="chip-trust ml-auto">Authorized</span>
+      <div className="flex items-center gap-2 mb-5">
+        <div className="w-9 h-9 rounded-xl bg-[var(--success-bg)] border border-[var(--success-border)] flex items-center justify-center">
+          <CheckCircle2 className="text-[var(--success)]" size={18} />
+        </div>
+        <div>
+          <span className="font-semibold text-[var(--text-primary)] block text-sm">Payment Link Ready</span>
+          <span className="text-[var(--text-muted)] text-xs">One-time authorization</span>
+        </div>
+        <span className="chip chip-success ml-auto text-[10px]">Authorized</span>
       </div>
 
       {/* Amount */}
-      <div className="text-center py-4 mb-4 border border-trust/15 rounded-2xl">
-        <p className="text-text-muted text-sm mb-1">Authorized Amount</p>
-        <div className="amount-display text-trust">₹{payment.amount_inr}</div>
-        <p className="text-text-muted text-xs mt-2">{product?.name} · {product?.merchant_name}</p>
+      <div className="text-center py-5 mb-5 rounded-2xl bg-[var(--surface-soft)] border border-[var(--border)]">
+        <p className="text-[var(--text-muted)] text-sm mb-1">Authorized Amount</p>
+        <div className="text-4xl font-extrabold text-[var(--text-primary)] tracking-tight">₹{payment.amount_inr}</div>
+        <p className="text-[var(--text-muted)] text-xs mt-2">{product?.name} · {product?.merchant_name}</p>
       </div>
 
       {/* Payment link */}
@@ -46,7 +51,7 @@ export default function PaymentStatus({ payment, product, transactionId, onVerif
           href={payment.payment_link_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="btn-primary w-full justify-center mb-3"
+          className="btn-primary w-full justify-center mb-4"
         >
           <Lock size={15} />
           Complete Payment on Razorpay
@@ -54,7 +59,7 @@ export default function PaymentStatus({ payment, product, transactionId, onVerif
         </a>
       )}
 
-      {/* Verify */}
+      {/* Verify + Audit */}
       <div className="flex gap-2">
         <button onClick={handleVerify} disabled={verifying} className="btn-ghost flex-1 justify-center text-sm py-2.5">
           {verifying ? (
@@ -69,10 +74,10 @@ export default function PaymentStatus({ payment, product, transactionId, onVerif
       </div>
 
       {/* Trust note */}
-      <p className="text-text-muted text-xs text-center mt-3 flex items-center justify-center gap-1">
-        <Lock size={10} />
-        Payment link ID: {payment.payment_link_id}
-      </p>
+      <div className="mt-4 flex items-center justify-center gap-1.5 text-[var(--text-muted)] text-xs">
+        <ShieldCheck size={10} className="text-[var(--success)]" />
+        <span>Bound to this purchase · Cannot be reused · Payment link ID: {payment.payment_link_id}</span>
+      </div>
     </motion.div>
   )
 }
